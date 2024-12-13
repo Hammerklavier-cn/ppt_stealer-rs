@@ -40,7 +40,7 @@ struct Cli {
 
 fn main() {
 
-    std::env::set_var("RUST_LOG", "debug");
+    std::env::set_var("RUST_LOG", "trace");
     env_logger::init();
     
     // Parse command line arguments
