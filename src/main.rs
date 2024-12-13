@@ -1,7 +1,8 @@
 use clap::{Parser, ArgGroup};
 use log;
 use env_logger;
-use std::{self, path, str::FromStr};
+use std::{self, str::FromStr};
+use std::path::{PathBuf, Path};
 
 mod WatchDog;
 
@@ -56,10 +57,24 @@ fn main() {
             // ask user for desktop path
             let mut path = String::new();
             std::io::stdin().read_line(&mut path).expect("Failed to read line");
-            path::PathBuf::from_str(path.trim()).unwrap()
+            let path = PathBuf::from_str(path.trim()).unwrap();
+            // check if the so-called desktop path is valid
+            match path.is_dir() {
+                true => path,
+                false => {
+                    log::error!("{} is invalid desktop path", path.display());
+                    std::process::exit(1);
+                }
+            }
         }
     };
     log::info!("Desktop path: {}", desktop_path.display());
 
     println!("Hello, world!");
+}
+
+fn no_gui(desktop_path: &Path, args: Cli) {
+    log::info!("No GUI mode on.");
+
+    log::info!("Start monitering files...");
 }
