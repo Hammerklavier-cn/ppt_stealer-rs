@@ -1,6 +1,9 @@
 use clap::{Parser, ArgGroup};
 use log;
 use env_logger;
+use std::{self, path, str::FromStr};
+
+mod WatchDog;
 
 #[derive(Parser, Debug)]
 #[command(name = "ppt_stealer-rs", version = "0.1")]
@@ -45,6 +48,18 @@ fn main() {
     log::info!("ppt_stealer-rs v0.1");
     // print args
     log::info!("Args: {:?}", args);
+
+    // get desktop path
+    let desktop_path = match dirs::desktop_dir() {
+        Some(path) => path,
+        None => {
+            // ask user for desktop path
+            let mut path = String::new();
+            std::io::stdin().read_line(&mut path).expect("Failed to read line");
+            path::PathBuf::from_str(path.trim()).unwrap()
+        }
+    };
+    log::info!("Desktop path: {}", desktop_path.display());
 
     println!("Hello, world!");
 }
