@@ -14,7 +14,7 @@ mod watch_dog;
 #[command(group(
     ArgGroup::new("auth")
         .args(&["password", "key_auth"])
-        .required(true)
+        .required(false)
         .multiple(false)
 ))]
 struct Cli {
@@ -34,7 +34,7 @@ struct Cli {
     key_auth: bool,
 
     #[arg(long, default_value_t = false)]
-    gui: bool,
+    no_gui: bool,
 }
 
 
@@ -74,11 +74,11 @@ fn main() {
 
     println!("Hello, world!");
 
-    if args.gui {
+    if args.no_gui {
+        no_gui(&desktop_path, args);
+    } else {
         // start GUI
         log::error!("GUI mode is still under development.");
-    } else {
-        no_gui(&desktop_path, args);
     }
 }
 
