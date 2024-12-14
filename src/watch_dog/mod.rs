@@ -58,7 +58,6 @@ fn is_hidden(entry: &walkdir::DirEntry) -> bool {
         .map_or(false, |s| s.starts_with('.'))
 }
 
-// TODO: implement
 /// Get the sha256 hash of all files in a given list.
 pub fn get_hashes<'a>(paths: &'a [&'a Path]) -> HashMap<&'a Path, String> {
     let mut map_of_hashes: std::collections::HashMap<&Path, String> = HashMap::new();
