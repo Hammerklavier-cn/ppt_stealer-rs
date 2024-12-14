@@ -90,7 +90,7 @@ fn no_gui(desktop_path: &Path, args: Cli) {
 
     log::info!("Start monitering files...");
     loop {
-        let path_bufs = watch_dog::file_moniter(desktop_path);
+        let path_bufs: Vec<PathBuf> = watch_dog::file_moniter(desktop_path);
 
         let paths: Vec<&Path> = path_bufs.iter().map(|p: &PathBuf| p.as_path()).collect::<Vec<&Path>>();
 
