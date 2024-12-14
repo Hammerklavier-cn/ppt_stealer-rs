@@ -6,7 +6,7 @@ use std::time::Duration;
 use std::{self, str::FromStr};
 use std::path::{PathBuf, Path};
 
-mod WatchDog;
+mod watch_dog;
 
 #[derive(Parser, Debug)]
 #[command(name = "ppt_stealer-rs", version = "0.1")]
@@ -87,7 +87,7 @@ fn no_gui(desktop_path: &Path, args: Cli) {
 
     log::info!("Start monitering files...");
     loop {
-        WatchDog::file_moniter(desktop_path);
+        watch_dog::file_moniter(desktop_path);
 
         sleep(Duration::from_secs(5));
     }
