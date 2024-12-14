@@ -18,25 +18,25 @@ mod watch_dog;
         .multiple(false)
 ))]
 struct Cli {
-    #[arg(short = 'i', long)]
+    #[arg(short = 'i', long, help = "FTP IP address or domain")]
     ftp_ip: Option<String>,
 
-    #[arg(short = 'p', long)]
+    #[arg(short = 'p', long, help = "FTP IP port")]
     ftp_port: Option<i64>,
 
-    #[arg(short = 'u', long)]
+    #[arg(short = 'u', long, help = "FTP username")]
     username: Option<String>,
 
-    #[arg(short = 'P', long, group = "auth")]
+    #[arg(short = 'P', long, group = "auth", help = "FTP password")]
     password: Option<String>,
 
-    #[arg(long, default_value_t = false, group = "auth")]
+    #[arg(long, default_value_t = false, group = "auth", help = "Use FTP key authentication. If not assigned, password authentication will be used.")]
     key_auth: bool,
 
-    #[arg(long, default_value_t = 30)]
+    #[arg(long, default_value_t = 30, help = "Refresh interval in seconds")]
     refresh_interval: u64,
 
-    #[arg(long, default_value_t = false)]
+    #[arg(long, default_value_t = false, help = "Assign no GUI mode")]
     no_gui: bool,
 }
 
