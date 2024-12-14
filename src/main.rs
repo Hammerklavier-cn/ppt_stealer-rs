@@ -94,7 +94,7 @@ fn no_gui(desktop_path: &Path, args: Cli) {
 
         let paths: Vec<&Path> = path_bufs.iter().map(|p: &PathBuf| p.as_path()).collect::<Vec<&Path>>();
 
-        let hashes = watch_dog::get_hashes(&paths);
+        let _ = watch_dog::get_hashes(&paths);
         
         sleep(Duration::from_secs(args.refresh_interval));
     }

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, iter::Map, path::{Path, PathBuf}};
+use std::{collections::HashMap, path::{Path, PathBuf}};
 use walkdir::WalkDir;
 use sha2::{Sha256, Digest};
 
@@ -83,7 +83,7 @@ fn get_file_sha256(path: &Path) -> String {
 
     // create a hasher instance
     log::trace!("Creating hasher instance for {}", path.display());
-    let mut hasher = sha2::Sha256::new();
+    let mut hasher = Sha256::new();
 
     // read the file contents into the hasher
     log::trace!("Reading file contents of {}", path.display());
