@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::{collections::HashMap, iter::Map, path::{Path, PathBuf}};
 use walkdir::WalkDir;
 use sha2::{Sha256, Digest};
 
@@ -58,8 +58,21 @@ fn is_hidden(entry: &walkdir::DirEntry) -> bool {
         .map_or(false, |s| s.starts_with('.'))
 }
 
+// TODO: implement
+/// Get the sha256 hash of all files in a given list.
+pub fn get_hashes<'a>(paths: &'a [&'a Path]) -> HashMap<&'a Path, String> {
+    let mut map_of_hashes: std::collections::HashMap<&Path, String> = HashMap::new();
+
+    for &path in paths.iter() {
+        let hash = get_file_sha256(path);
+        map_of_hashes.insert(path, hash);
+    }
+
+    return map_of_hashes;
+}
+
 /// Get the sha256 hash of a given file.
-pub fn get_file_sha256(path: &Path) -> String {
+fn get_file_sha256(path: &Path) -> String {
 
     log::debug!("Getting sha256 hash of {}", path.display());
     

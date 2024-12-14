@@ -33,7 +33,7 @@ struct Cli {
     #[arg(long, default_value_t = false, group = "auth")]
     key_auth: bool,
 
-    #[arg(long, default_value_t = 5)]
+    #[arg(long, default_value_t = 30)]
     refresh_interval: u64,
 
     #[arg(long, default_value_t = false)]
@@ -90,8 +90,12 @@ fn no_gui(desktop_path: &Path, args: Cli) {
 
     log::info!("Start monitering files...");
     loop {
-        watch_dog::file_moniter(desktop_path);
+        let path_bufs = watch_dog::file_moniter(desktop_path);
 
+        let paths: Vec<&Path> = path_bufs.iter().map(|p: &PathBuf| p.as_path()).collect::<Vec<&Path>>();
+
+        let hashes = watch_dog::get_hashes(&paths);
+        
         sleep(Duration::from_secs(args.refresh_interval));
     }
 }
