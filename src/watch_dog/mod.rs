@@ -14,13 +14,13 @@ pub fn file_moniter(path: &Path) -> Vec<PathBuf> {
         if path.is_file() {
             if let Some(ext) = path.extension() {
                 if ["ppt", "pptx", "odp"].contains(&ext.to_str().unwrap().to_lowercase().as_str()) {
-                    log::trace!("Found ppt file {}", path.display());
+                    log::trace!("Found powerpoint/impress file {}", path.display());
                     document_files.push(path);
                 } else if ["doc", "docx", "odt"].contains(&ext.to_str().unwrap().to_lowercase().as_str()) {
-                    log::trace!("Found doc file {}", path.display());
+                    log::trace!("Found document/writer file {}", path.display());
                     document_files.push(path);
                 } else if ["xls", "xlsx", "ods"].contains(&ext.to_str().unwrap().to_lowercase().as_str()) {
-                    log::trace!("Found xls file {}", path.display());
+                    log::trace!("Found excel/calc file {}", path.display());
                     document_files.push(path);
                 } else if ext.to_str().unwrap().to_lowercase().as_str() == "pdf" {
                     log::trace!("Found pdf file {}", path.display());
