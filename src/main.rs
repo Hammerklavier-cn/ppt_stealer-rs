@@ -33,6 +33,9 @@ struct Cli {
     #[arg(long, default_value_t = false, group = "auth")]
     key_auth: bool,
 
+    #[arg(long, default_value_t = 5)]
+    refresh_interval: u64,
+
     #[arg(long, default_value_t = false)]
     no_gui: bool,
 }
@@ -89,6 +92,6 @@ fn no_gui(desktop_path: &Path, args: Cli) {
     loop {
         watch_dog::file_moniter(desktop_path);
 
-        sleep(Duration::from_secs(5));
+        sleep(Duration::from_secs(args.refresh_interval));
     }
 }
