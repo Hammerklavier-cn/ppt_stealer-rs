@@ -29,7 +29,7 @@ pub fn file_moniter(path: &Path) -> Vec<PathBuf> {
             }
         }
     }
-    log::debug!("Found {} ppt files", document_files.len());
+    log::debug!("Found {} files", document_files.len());
 
     return document_files;
 }
