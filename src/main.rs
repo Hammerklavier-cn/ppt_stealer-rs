@@ -19,13 +19,13 @@ mod watch_dog;
 ))]
 struct Cli {
     #[arg(short = 'i', long)]
-    ftp_ip: String,
+    ftp_ip: Option<String>,
 
     #[arg(short = 'p', long)]
-    ftp_port: i64,
+    ftp_port: Option<i64>,
 
     #[arg(short = 'u', long)]
-    username: String,
+    username: Option<String>,
 
     #[arg(short = 'P', long, group = "auth")]
     password: Option<String>,
