@@ -15,28 +15,33 @@ log = "0.4.22"
 env_logger = "0.9"
 walkdir = "2.5.0"
 sha2 = "0.10.8"
+ssh2 = "0.9.4"
+ctrlc = "3.4.5"
+chrono = "0.4.39"
 ```
 
 ## 参数
 
 ```plaintext
-Usage: ppt_stealer-rs [OPTIONS]
+Usage: ppt_stealer-rs.exe [OPTIONS]
 
 Options:
-  -i, --ftp-ip <FTP_IP>
-          FTP IP address or domain
-  -p, --ftp-port <FTP_PORT>
-          FTP IP port
+  -i, --ssh-ip <SSH_IP>
+          SSH IP address or domain
+  -p, --ssh-port <SSH_PORT>
+          SSH IP port
   -u, --username <USERNAME>
-          FTP username
+          SSH username
   -P, --password <PASSWORD>
-          FTP password
+          SSH password
       --key-auth
-          Use FTP key authentication. If not assigned, password authentication will be used.
+          Use SSH key authentication. If not assigned, password authentication will be used.
       --refresh-interval <REFRESH_INTERVAL>
           Refresh interval in seconds [default: 30]
       --no-gui
           Assign no GUI mode
+      --folder-name <FOLDER_NAME>
+          Folder name for files
   -h, --help
           Print help
   -V, --version
