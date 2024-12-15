@@ -1,7 +1,9 @@
 use clap::{Parser, ArgGroup};
 use log;
 use env_logger;
+use ssh2::Session;
 use std::collections::HashMap;
+use std::net::TcpStream;
 use std::thread::sleep;
 use std::time::Duration;
 use std::{self, str::FromStr};
@@ -19,19 +21,19 @@ mod watch_dog;
         .multiple(false)
 ))]
 struct Cli {
-    #[arg(short = 'i', long, help = "FTP IP address or domain")]
-    ftp_ip: Option<String>,
+    #[arg(short = 'i', long, help = "SSH IP address or domain")]
+    ssh_ip: Option<String>,
 
-    #[arg(short = 'p', long, help = "FTP IP port")]
-    ftp_port: Option<i64>,
+    #[arg(short = 'p', long, help = "SSH IP port")]
+    ssh_port: Option<i64>,
 
-    #[arg(short = 'u', long, help = "FTP username")]
+    #[arg(short = 'u', long, help = "SSH username")]
     username: Option<String>,
 
-    #[arg(short = 'P', long, group = "auth", help = "FTP password")]
+    #[arg(short = 'P', long, group = "auth", help = "SSH password")]
     password: Option<String>,
 
-    #[arg(long, default_value_t = false, group = "auth", help = "Use FTP key authentication. If not assigned, password authentication will be used.")]
+    #[arg(long, default_value_t = false, group = "auth", help = "Use SSH key authentication. If not assigned, password authentication will be used.")]
     key_auth: bool,
 
     #[arg(long, default_value_t = 30, help = "Refresh interval in seconds")]
@@ -88,6 +90,47 @@ fn main() {
 
 fn no_gui(desktop_path: &Path, args: Cli) {
     log::info!("No GUI mode on.");
+
+    log::info!("Connecting to SSH server...");
+
+    let tcp = {
+        let ip = args.ssh_ip.expect("On no GUI mode, SSH IP address is required!");
+        let port = args.ssh_port.unwrap_or_else(|| 22);
+
+        let addr = format!("{}:{}", ip, port);
+
+        match TcpStream::connect(addr) {
+            Ok(stream) => stream,
+            Err(e) => {
+                log::error!("Failed to connect to SSH server: {}", e);
+                std::process::exit(1);
+            }
+        }
+    };
+    log::info!("Established tcp connection with SSH server.");
+
+    log::info!("Starting SSH session...");
+    let mut sess = Session::new().unwrap();
+    sess.set_tcp_stream(tcp);
+    sess.handshake().unwrap();
+    if args.key_auth {
+        let private_key_path = dirs::home_dir().unwrap().join(".ssh/id_rsa");
+        log::debug!("Authenticating with rivate key: {}", private_key_path.display());
+
+        sess.userauth_pubkey_file(
+            &args.username.expect("On no GUI mode, SSH username is required!"),
+            None,
+            &private_key_path,
+            None,
+        ).expect("Failed to authenticate with SSH key.");
+    } else {
+        sess.userauth_password(
+            &args.username.expect("On no GUI mode, SSH username is required!"),
+            &args.password.expect("On no GUI mode, SSH password is required!"),
+        ).expect("Failed to authenticate with SSH password.");
+    }
+    assert!(sess.authenticated());
+    log::info!("SSH Authentication successful.");
 
     log::info!("Start monitering files...");
 
