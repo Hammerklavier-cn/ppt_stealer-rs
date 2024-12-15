@@ -1,8 +1,11 @@
+use chrono::Local;
 use clap::{Parser, ArgGroup};
 use log;
 use env_logger;
 use ssh2::Session;
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+use std::{fs, io};
 use std::net::TcpStream;
 use std::thread::sleep;
 use std::time::Duration;
@@ -41,6 +44,9 @@ struct Cli {
 
     #[arg(long, default_value_t = false, help = "Assign no GUI mode")]
     no_gui: bool,
+
+    #[arg(long, help = "Folder name for files")]
+    folder_name: Option<String>,
 }
 
 
@@ -91,10 +97,55 @@ fn main() {
 fn no_gui(desktop_path: &Path, args: Cli) {
     log::info!("No GUI mode on.");
 
+    let sess = Arc::new(Mutex::new(establish_ssh_connection(&args)));
+
+    // make sure ssh connection closed after Ctrl+C.
+    ctrlc::set_handler({
+        let sess = Arc::clone(&sess);
+        move || {
+            log::info!("Ctrl+C detected. Exiting...");
+            let sess = sess.lock().unwrap();
+            sess.disconnect(None, "CtrlC detected", None).expect("Failed to disconnect from SSH server.");
+            log::info!("SSH session closed.");
+            std::process::exit(0);
+        }
+    }).expect("Error setting Ctrl+C handler.");
+
+    log::info!("Start monitering files...");
+
+    let mut file_hashes: HashMap<PathBuf, String> = HashMap::new();
+
+    loop {
+        let path_bufs: Vec<PathBuf> = watch_dog::file_moniter(desktop_path);
+
+        // let paths: Vec<&Path> = path_bufs.iter().map(|p: &PathBuf| p.as_path()).collect::<Vec<&Path>>();
+
+        let new_file_hashes = watch_dog::get_hashes(&path_bufs);
+
+        let changed_files: Vec<PathBuf> = watch_dog::get_changed_files(&file_hashes, &new_file_hashes);
+
+        if changed_files.len() > 0 {
+            log::info!("Detected changed files.");
+
+            log::debug!("Changed files: {:?}", changed_files);
+
+            file_hashes = new_file_hashes;
+
+            upload_changed_files(changed_files, &args, &sess);
+
+        } else {
+            log::info!("No changes detected.");
+        }
+        
+        sleep(Duration::from_secs(args.refresh_interval));
+    }
+}
+
+fn establish_ssh_connection(args: &Cli) -> Session  {
     log::info!("Connecting to SSH server...");
 
     let tcp = {
-        let ip = args.ssh_ip.expect("On no GUI mode, SSH IP address is required!");
+        let ip = args.ssh_ip.as_ref().expect("On no GUI mode, SSH IP address is required!");
         let port = args.ssh_port.unwrap_or_else(|| 22);
 
         let addr = format!("{}:{}", ip, port);
@@ -118,52 +169,95 @@ fn no_gui(desktop_path: &Path, args: Cli) {
         log::debug!("Authenticating with rivate key: {}", private_key_path.display());
 
         sess.userauth_pubkey_file(
-            &args.username.expect("On no GUI mode, SSH username is required!"),
+            args.username.as_ref().expect("On no GUI mode, SSH username is required!"),
             None,
             &private_key_path,
             None,
         ).expect("Failed to authenticate with SSH key.");
     } else {
         sess.userauth_password(
-            &args.username.expect("On no GUI mode, SSH username is required!"),
-            &args.password.expect("On no GUI mode, SSH password is required!"),
+            args.username.as_ref().expect("On no GUI mode, SSH username is required!"),
+            args.password.as_ref().expect("On no GUI mode, SSH password is required!"),
         ).expect("Failed to authenticate with SSH password.");
     }
     assert!(sess.authenticated());
     log::info!("SSH Authentication successful.");
 
-    // make sure ssh connection closed after Ctrl+C.
-    ctrlc::set_handler(move || {
-        log::info!("Ctrl+C detected. Exiting...");
-        sess.disconnect(None, "CtrlC detected", None).expect("Failed to disconnect from SSH server.");
-        log::info!("SSH session closed.");
-        std::process::exit(0);
-    }).expect("Error setting Ctrl+C handler.");
+    sess
+}
 
-    log::info!("Start monitering files...");
+fn upload_changed_files(changed_files: Vec<PathBuf>, args: &Cli, sess: &Arc<Mutex<Session>>) {
 
-    let mut file_hashes: HashMap<PathBuf, String> = HashMap::new();
+    // Upload changed files through SFTP.
+    // determine remote folder name where the files will be uploaded.
+    // the remote folder name is {YYYY-MM-DD/args.remote_folder}
 
-    loop {
-        let path_bufs: Vec<PathBuf> = watch_dog::file_moniter(desktop_path);
+    let formatted_date = Local::now().format("%Y-%m-%d").to_string();
 
-        // let paths: Vec<&Path> = path_bufs.iter().map(|p: &PathBuf| p.as_path()).collect::<Vec<&Path>>();
+    let remote_folder_name = {
 
-        let new_file_hashes = watch_dog::get_hashes(&path_bufs);
+        let computer_identifier = match args.folder_name.as_ref() {
+            Some(name) => name.to_string(),
+            None => {
+                let home_dir = dirs::home_dir().unwrap();
+                home_dir.file_name().unwrap().to_str().unwrap().to_string()
+            }
+        };
 
-        let changed_files: Vec<PathBuf> = watch_dog::get_changed_files(&file_hashes, &new_file_hashes);
+        format!("{}/{}", formatted_date, computer_identifier)
+    };
 
-        if changed_files.len() > 0 {
-            log::info!("Detected changed files.");
+    log::info!("Uploading changed files to {}", remote_folder_name);
 
-            log::debug!("Changed files: {:?}", changed_files);
+    // establish sftp session
+    let sftp = {
+        let sess = sess.lock().unwrap();
+        sess.sftp().unwrap()
+    };
+    log::info!("SFTP session established.");
 
-            file_hashes = new_file_hashes;
-
-        } else {
-            log::info!("No changes detected.");
-        }
+    // 检查远程文件夹是否存在
+    {
+        let remote_folder_exists = sftp.stat(Path::new(&formatted_date)).is_ok();
         
-        sleep(Duration::from_secs(args.refresh_interval));
+        if !remote_folder_exists {
+            log::info!("Remote folder '{}' does not exist, creating it.", &formatted_date);
+            // 创建远程文件夹
+            sftp.mkdir(Path::new(&formatted_date), 0o755).expect("Failed to create remote folder.");
+        } else {
+            log::info!("Remote folder '{}' already exists.", &formatted_date);
+        }
+
+        let remote_folder_exists = sftp.stat(Path::new(&remote_folder_name)).is_ok();
+        if !remote_folder_exists {
+            log::info!("Remote folder '{}' does not exist, creating it.", &remote_folder_name);
+            // 创建远程文件夹
+            sftp.mkdir(Path::new(&remote_folder_name), 0o755).expect("Failed to create remote folder.");
+        } else {
+            log::info!("Remote folder '{}' already exists.", &remote_folder_name);
+        }
     }
+    
+
+    // upload changed files to the assigned folder.
+    for file in changed_files {
+        log::debug!("Uploading {}", file.to_str().unwrap());
+
+        // open local file
+        let mut local_file = fs::File::open(&file).expect("Failed to open local file.");
+
+        // check if remote file exists. If so, remove it.
+        let remote_file_path = format!("{}/{}", remote_folder_name, file.file_name().unwrap().to_str().unwrap());
+        let remote_file_exists = sftp.stat(Path::new(&remote_file_path)).is_ok();
+        if remote_file_exists {
+            sftp.unlink(Path::new(&remote_file_path)).expect("Failed to remove remote file.");
+        }
+
+        // create remote file
+        let mut remote_file = sftp.create(Path::new(&remote_file_path)).expect("Failed to create remote file.");
+
+        // copy local file to remote server
+        io::copy(&mut local_file, &mut remote_file).expect("Failed to copy file.");
+    }
+    log::info!("Finished uploading files.");
 }
