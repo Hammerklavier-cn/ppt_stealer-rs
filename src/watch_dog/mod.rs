@@ -59,12 +59,12 @@ fn is_hidden(entry: &walkdir::DirEntry) -> bool {
 }
 
 /// Get the sha256 hash of all files in a given list.
-pub fn get_hashes<'a>(paths: &'a [&'a Path]) -> HashMap<&'a Path, String> {
-    let mut map_of_hashes: std::collections::HashMap<&Path, String> = HashMap::new();
+pub fn get_hashes<'a>(path_bufs: &[PathBuf]) -> HashMap<PathBuf, String> {
+    let mut map_of_hashes: std::collections::HashMap<PathBuf, String> = HashMap::new();
 
-    for &path in paths.iter() {
+    for path in path_bufs.iter() {
         let hash = get_file_sha256(path);
-        map_of_hashes.insert(path, hash);
+        map_of_hashes.insert(path.clone(), hash);
     }
 
     return map_of_hashes;
@@ -95,4 +95,28 @@ fn get_file_sha256(path: &Path) -> String {
 
     log::debug!("Hash of {} is {}", path.display(), result);
     return result;
+}
+
+
+/** Compare SHA256 hashes of files in two HashMaps, 
+    and return a vector of files that altered. */
+pub fn get_changed_files(
+    old_map: &HashMap<PathBuf, String>, new_map: &HashMap<PathBuf, String>
+) -> Vec<PathBuf> {
+
+    let mut changed_files: Vec<PathBuf> = Vec::new();
+
+    for (path, new_hash) in new_map.iter() {
+        match old_map.get(path) {
+            Some(old_hash) => {
+                if old_hash != new_hash {
+                    changed_files.push(path.to_path_buf());
+                }
+            },
+            None => {
+                changed_files.push(path.to_path_buf());
+            }
+        }
+    }
+    changed_files
 }

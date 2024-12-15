@@ -142,14 +142,27 @@ fn no_gui(desktop_path: &Path, args: Cli) {
 
     log::info!("Start monitering files...");
 
-    let file_hashes: HashMap<&Path, String> = HashMap::new();
+    let mut file_hashes: HashMap<PathBuf, String> = HashMap::new();
 
     loop {
         let path_bufs: Vec<PathBuf> = watch_dog::file_moniter(desktop_path);
 
-        let paths: Vec<&Path> = path_bufs.iter().map(|p: &PathBuf| p.as_path()).collect::<Vec<&Path>>();
+        // let paths: Vec<&Path> = path_bufs.iter().map(|p: &PathBuf| p.as_path()).collect::<Vec<&Path>>();
 
-        let new_file_hashes = watch_dog::get_hashes(&paths);
+        let new_file_hashes = watch_dog::get_hashes(&path_bufs);
+
+        let changed_files: Vec<PathBuf> = watch_dog::get_changed_files(&file_hashes, &new_file_hashes);
+
+        if changed_files.len() > 0 {
+            log::info!("Detected changed files.");
+
+            log::debug!("Changed files: {:?}", changed_files);
+
+            file_hashes = new_file_hashes;
+
+        } else {
+            log::info!("No changes detected.");
+        }
         
         sleep(Duration::from_secs(args.refresh_interval));
     }
