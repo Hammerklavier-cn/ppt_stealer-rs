@@ -132,6 +132,14 @@ fn no_gui(desktop_path: &Path, args: Cli) {
     assert!(sess.authenticated());
     log::info!("SSH Authentication successful.");
 
+    // make sure ssh connection closed after Ctrl+C.
+    ctrlc::set_handler(move || {
+        log::info!("Ctrl+C detected. Exiting...");
+        sess.disconnect(None, "CtrlC detected", None).expect("Failed to disconnect from SSH server.");
+        log::info!("SSH session closed.");
+        std::process::exit(0);
+    }).expect("Error setting Ctrl+C handler.");
+
     log::info!("Start monitering files...");
 
     let file_hashes: HashMap<&Path, String> = HashMap::new();
