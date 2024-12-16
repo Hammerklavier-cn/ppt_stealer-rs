@@ -15,7 +15,7 @@ use std::path::{PathBuf, Path};
 mod watch_dog;
 
 #[derive(Parser, Debug)]
-#[command(name = "ppt_stealer-rs", version = "0.1")]
+#[command(name = "ppt_stealer-rs", version = "0.2")]
 #[command(about = "A tool to steal PowerPoint files from desktop to remote SSH server.", long_about = None)]
 #[command(group(
     ArgGroup::new("auth")
@@ -47,20 +47,25 @@ struct Cli {
 
     #[arg(long, help = "Folder name for files")]
     folder_name: Option<String>,
+
+    #[arg(short = 'L', long, help = "Debug level. Choose from trace, debug, info, warn and error", default_value = "warn")]
+    debug_level: String,
 }
 
 
 fn main() {
 
-    std::env::set_var("RUST_LOG", "trace");
-    env_logger::init();
     
     // Parse command line arguments
     let args = Cli::parse();
 
+    // set debug level
+    std::env::set_var("RUST_LOG", &args.debug_level);
+    env_logger::init();
+
     // Set up logging
     // print name and version
-    log::info!("ppt_stealer-rs v0.1");
+    log::info!("ppt_stealer-rs v0.2");
     // print args
     log::info!("Args: {:?}", args);
 

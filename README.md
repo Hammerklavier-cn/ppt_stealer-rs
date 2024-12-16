@@ -42,6 +42,8 @@ Options:
           Assign no GUI mode
       --folder-name <FOLDER_NAME>
           Folder name for files
+  -L, --debug-level <DEBUG_LEVEL>
+          Debug level. Choose from trace, debug, info, warn and error [default: warn]
   -h, --help
           Print help
   -V, --version
