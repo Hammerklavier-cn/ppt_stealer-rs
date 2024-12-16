@@ -50,3 +50,11 @@ Options:
           Print version
 
 ```
+
+## 编译
+
+1. 安装 rustc 和 cargo  
+   前往 [rust-lang.org/install](https://www.rust-lang.org/tools/install) 下载、安装 Rust 工具链。
+2. cd <项目根目录>
+3. cargo build --release
+4. 二进制文件位于 target/release/ 中
