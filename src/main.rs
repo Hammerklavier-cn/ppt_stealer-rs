@@ -13,6 +13,7 @@ use std::{self, str::FromStr};
 use std::path::{PathBuf, Path};
 
 mod watch_dog;
+mod connection_tools;
 
 #[derive(Parser, Debug)]
 #[command(name = "ppt_stealer-rs", version = "0.2")]
@@ -104,6 +105,7 @@ fn no_gui(desktop_path: &Path, args: Cli) {
 
     let sess = Arc::new(Mutex::new(establish_ssh_connection(&args)));
 
+    // TODO: Have SshSessionGuard replace the mutex.
     // make sure ssh connection closed after Ctrl+C.
     ctrlc::set_handler({
         let sess = Arc::clone(&sess);
