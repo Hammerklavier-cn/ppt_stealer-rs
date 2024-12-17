@@ -8,5 +8,6 @@ impl Drop for SshSessionGuard<'_> {
         self.session
             .disconnect(None, "Out of scope, close session.", None)
             .expect("Failed to disconnect");
+        log::info!("Session closed successfully.")
     }
 }
