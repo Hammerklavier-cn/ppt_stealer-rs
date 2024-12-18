@@ -260,6 +260,7 @@ fn upload_changed_files(changed_files: Vec<PathBuf>, args: &Cli, sess: &Arc<Mute
         let remote_file_path = format!("{}/{}", remote_folder_name, file.file_name().unwrap().to_str().unwrap());
         let remote_file_exists = sftp.stat(Path::new(&remote_file_path)).is_ok();
         if remote_file_exists {
+            log::info!("Remote file '{}' already exists, removing it.", &remote_file_path);
             sftp.unlink(Path::new(&remote_file_path)).expect("Failed to remove remote file.");
         }
 
