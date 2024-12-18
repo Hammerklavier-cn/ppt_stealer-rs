@@ -1,5 +1,6 @@
 use chrono::Local;
 use clap::{Parser, ArgGroup};
+use connection_tools::SshSessionGuard;
 use log;
 use env_logger;
 use ssh2::Session;
@@ -103,7 +104,9 @@ fn main() {
 fn no_gui(desktop_path: &Path, args: Cli) {
     log::info!("No GUI mode on.");
 
-    let sess = Arc::new(Mutex::new(establish_ssh_connection(&args)));
+    let sess: Arc<Mutex<Session>> = Arc::new(Mutex::new(establish_ssh_connection(&args)));
+
+    let _sess_guard = SshSessionGuard{session: &sess};
 
     // TODO: Have SshSessionGuard replace the mutex.
     // make sure ssh connection closed after Ctrl+C.

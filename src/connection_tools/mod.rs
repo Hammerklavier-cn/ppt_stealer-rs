@@ -1,13 +1,17 @@
+use std::sync::{Arc, Mutex};
+
 use ssh2::Session;
 
-struct SshSessionGuard<'a> {
-    session: &'a mut Session,
+pub struct SshSessionGuard<'a> {
+    pub session: &'a Arc<Mutex<Session>>,
 }
 impl Drop for SshSessionGuard<'_> {
     fn drop(&mut self) {
-        self.session
-            .disconnect(None, "Out of scope, close session.", None)
-            .expect("Failed to disconnect");
-        log::info!("Session closed successfully.")
+        let sess = self.session.lock().unwrap();
+        match sess
+            .disconnect(None, "Out of scope, close session.", None) {
+                Ok(_) => log::info!("Session closed successfully."),
+                Err(e) => log::error!("Error closing session: {}", e)
+        }
     }
 }
