@@ -50,7 +50,7 @@ Options:
 
 注：各个分支（包括 main）的版本并不稳定，请使用发行版或标签的源代码进行编译。
 
-1. 安装 rustc 和 cargo  
+1. 安装 rustc 和 cargo
    前往 [rust-lang.org/install](https://www.rust-lang.org/tools/install) 下载、安装 Rust 工具链。
 2. cd <项目根目录>
 3. cargo build --release
@@ -76,13 +76,13 @@ chrono = "0.4.39"
 
 ## 计划
 
-- 去除缓冲文件 (will be supported in v0.2 final release)
-- 添加 GTK 客户端
-- 添加隐藏命令行窗口的模式
-- 添加对 ftp 服务器的支持
-- 在云端保留原文件相对桌面的相对路径 (will be supported in v0.4)
-- 添加文件去重功能
-- 指定路径，代替默认的桌面路径 (will be supported in v0.3)
-- 指定在目录搜索文件的最小、最大目录深度 (will be supported in v0.3)
-- 指定额外的文件格式 (will be supported in v0.3)
-- 通过正则表达式指定文件 (will be supported in v0.4)
+- [x] 去除缓冲文件 (will be supported in v0.2 final release)
+- [ ] 添加 GTK 客户端
+- [ ] 添加隐藏命令行窗口的模式
+- [ ] 添加对 ftp 服务器的支持
+- [ ] 在云端保留原文件相对桌面的相对路径 (will be supported in v0.4)
+- [ ] 添加文件去重功能
+- [ ] 指定路径，代替默认的桌面路径 (will be supported in v0.3)
+- [ ] 指定在目录搜索文件的最小、最大目录深度 (will be supported in v0.3)
+- [ ] 指定额外的文件格式 (will be supported in v0.3)
+- [ ] 通过正则表达式指定文件 (will be supported in v0.4)
