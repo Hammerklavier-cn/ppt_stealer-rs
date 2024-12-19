@@ -160,6 +160,8 @@ fn establish_ssh_connection(args: &Cli) -> Session  {
 
         let addr = format!("{}:{}", ip, port);
 
+        log::info!("Connecting to SSH server: {}", addr);
+
         match TcpStream::connect(addr) {
             Ok(stream) => stream,
             Err(e) => {
