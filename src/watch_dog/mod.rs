@@ -23,6 +23,11 @@ pub fn file_moniter(path: &Path) -> Vec<PathBuf> {
 
         if path.is_file() {
 
+            // exclude temp files
+            if path.file_name().unwrap().to_str().unwrap().starts_with("~$") {
+                continue;
+            }
+
             if let Some(ext) = path.extension() {
                 let ext_str = ext.to_str().unwrap().to_lowercase();
                 match ext_str.as_str() {
@@ -42,7 +47,7 @@ pub fn file_moniter(path: &Path) -> Vec<PathBuf> {
                         log::trace!("Found pdf file {}", path.display());
                         document_files.push(path);
                     }
-                    _ => {}
+                    _ => {continue;}
                 }
             }
         }
