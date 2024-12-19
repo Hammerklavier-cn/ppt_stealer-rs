@@ -1,7 +1,8 @@
 [package]
 name = "ppt_stealer-rs"
-version = "0.2.0"
+version = "0.2.2"
 edition = "2021"
+author = "Hammerklavier"
 
 [cargo.release]
 trace = false
