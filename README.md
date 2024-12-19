@@ -77,6 +77,7 @@ chrono = "0.4.39"
 ## 计划
 
 - [x] 去除缓冲文件 (will be supported in v0.2 final release)
+- [ ] 识别新插入的U盘，并上传其中所有的文档文件 (will be supported in v0.2 final release)
 - [ ] 添加 GTK 客户端
 - [ ] 添加隐藏命令行窗口的模式
 - [ ] 添加对 ftp 服务器的支持
