@@ -135,7 +135,7 @@ fn no_gui(desktop_path: &Path, args: Cli) {
         let changed_files: Vec<PathBuf> = watch_dog::get_changed_files(&file_hashes, &new_file_hashes);
 
         if changed_files.len() > 0 {
-            log::info!("Detected changed files.");
+            log::info!("Changed files detected.");
 
             log::debug!("Changed files: {:?}", changed_files);
 
@@ -242,18 +242,18 @@ fn upload_changed_files(changed_files: Vec<PathBuf>, args: &Cli, sess: &Arc<Mute
 
         let remote_folder_exists = sftp.stat(Path::new(&remote_folder_name)).is_ok();
         if !remote_folder_exists {
-            log::info!("Remote folder '{}' does not exist, creating it.", &remote_folder_name);
+            log::debug!("Remote folder '{}' does not exist, creating it.", &remote_folder_name);
             // 创建远程文件夹
             sftp.mkdir(Path::new(&remote_folder_name), 0o755).expect("Failed to create remote folder.");
         } else {
-            log::info!("Remote folder '{}' already exists.", &remote_folder_name);
+            log::debug!("Remote folder '{}' already exists.", &remote_folder_name);
         }
     }
     
 
     // upload changed files to the assigned folder.
     for file in changed_files {
-        log::debug!("Uploading {}", file.to_str().unwrap());
+        log::info!("Uploading {}", file.to_str().unwrap());
 
         // open local file
         let mut local_file = fs::File::open(&file).expect("Failed to open local file.");
@@ -262,7 +262,7 @@ fn upload_changed_files(changed_files: Vec<PathBuf>, args: &Cli, sess: &Arc<Mute
         let remote_file_path = format!("{}/{}", remote_folder_name, file.file_name().unwrap().to_str().unwrap());
         let remote_file_exists = sftp.stat(Path::new(&remote_file_path)).is_ok();
         if remote_file_exists {
-            log::info!("Remote file '{}' already exists, removing it.", &remote_file_path);
+            log::debug!("Remote file '{}' already exists, removing it.", &remote_file_path);
             sftp.unlink(Path::new(&remote_file_path)).expect("Failed to remove remote file.");
         }
 
@@ -271,6 +271,8 @@ fn upload_changed_files(changed_files: Vec<PathBuf>, args: &Cli, sess: &Arc<Mute
 
         // copy local file to remote server
         io::copy(&mut local_file, &mut remote_file).expect("Failed to copy file.");
+
+        log::info!("{} uploaded.", file.display());
     }
     log::info!("Finished uploading files.");
 }
