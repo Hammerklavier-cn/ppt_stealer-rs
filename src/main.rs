@@ -12,6 +12,7 @@ use std::thread::sleep;
 use std::time::Duration;
 use std::{self, str::FromStr};
 use std::path::{PathBuf, Path};
+use sysinfo::{Disk, System};
 
 mod watch_dog;
 mod connection_tools;
@@ -27,10 +28,10 @@ mod connection_tools;
 ))]
 struct Cli {
     #[arg(short = 'i', long, help = "SSH IP address or domain")]
-    ssh_ip: Option<String>,
+    ip: Option<String>,
 
     #[arg(short = 'p', long, help = "SSH IP port")]
-    ssh_port: Option<i64>,
+    port: Option<i64>,
 
     #[arg(short = 'u', long, help = "SSH username")]
     username: Option<String>,
@@ -47,8 +48,11 @@ struct Cli {
     #[arg(long, default_value_t = false, help = "Assign no GUI mode")]
     no_gui: bool,
 
-    #[arg(long, help = "Folder name for files")]
-    folder_name: Option<String>,
+    #[arg(long, help = "Scan additional folder for files.")]
+    folder_path: Option<String>,
+
+    #[arg(long, help = "Scan USB for files.")]
+    usb: bool,
 
     #[arg(short = 'L', long, help = "Debug level. Choose from trace, debug, info, warn and error", default_value = "warn")]
     debug_level: String,
@@ -155,8 +159,8 @@ fn establish_ssh_connection(args: &Cli) -> Session  {
     log::info!("Connecting to SSH server...");
 
     let tcp = {
-        let ip = args.ssh_ip.as_ref().expect("On no GUI mode, SSH IP address is required!");
-        let port = args.ssh_port.unwrap_or_else(|| 22);
+        let ip = args.ip.as_ref().expect("On no GUI mode, SSH IP address is required!");
+        let port = args.port.unwrap_or_else(|| 22);
 
         let addr = format!("{}:{}", ip, port);
 
@@ -208,7 +212,7 @@ fn upload_changed_files(changed_files: Vec<PathBuf>, args: &Cli, sess: &Arc<Mute
 
     let remote_folder_name = {
 
-        let computer_identifier = match args.folder_name.as_ref() {
+        let computer_identifier = match args.folder_path.as_ref() {
             Some(name) => name.to_string(),
             None => {
                 let home_dir = dirs::home_dir().unwrap();
