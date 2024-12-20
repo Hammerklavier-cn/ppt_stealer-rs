@@ -211,7 +211,7 @@ fn establish_ssh_connection(args: &Cli) -> Session  {
     ### changed_files:
     It is a reference to a vector of tuples, where each tuple contains two elements:  
     - The first element is the &Path of the file on the local machine.
-    - The second is the root path, by which a relative path is calculated.
+    - The second is the path of the root folder, by which a relative path is calculated.
     With the relative path, a directory is created on the remote machine,
     and the file is uploaded to that directory.
     ### args: 
@@ -248,11 +248,11 @@ fn upload_changed_files(changed_files: &[[&Path; 2]], args: &Cli, sess: &Arc<Mut
             let remote_folder_exists = sftp.stat(Path::new(&formatted_date)).is_ok();
             
             if !remote_folder_exists {
-                log::info!("Remote folder '{}' does not exist, creating it.", &formatted_date);
+                log::debug!("Remote folder '{}' does not exist, creating it.", &formatted_date);
                 // 创建远程文件夹
                 sftp.mkdir(Path::new(&formatted_date), 0o755).expect("Failed to create remote folder.");
             } else {
-                log::info!("Remote folder '{}' already exists.", &formatted_date);
+                log::debug!("Remote folder '{}' already exists.", &formatted_date);
             }
     
             let remote_folder_exists = sftp.stat(Path::new(&remote_folder_name)).is_ok();
@@ -269,6 +269,14 @@ fn upload_changed_files(changed_files: &[[&Path; 2]], args: &Cli, sess: &Arc<Mut
     };
 
     // TODO: get relative path of files, create corresponding folders on the remote machine, and upload files.
+    for [file_path, root_path] in changed_files.iter() {
+        let relative_path = file_path.strip_prefix(root_path).expect("Failed to strip prefix.");
+
+        let remote_path_string = format!("{}/{}", remote_folder_name, relative_path.to_str().unwrap());
+        let remote_path = Path::new(&remote_path_string);
+
+        log::info!("Uploading file: {} to remote folder: {}", relative_path.display(), remote_path.display())
+    }
 }
 
 /// ### This function is deprecated.  
@@ -308,11 +316,11 @@ fn upload_changed_files_deprecated(changed_files: Vec<PathBuf>, args: &Cli, sess
         let remote_folder_exists = sftp.stat(Path::new(&formatted_date)).is_ok();
         
         if !remote_folder_exists {
-            log::info!("Remote folder '{}' does not exist, creating it.", &formatted_date);
+            log::debug!("Remote folder '{}' does not exist, creating it.", &formatted_date);
             // 创建远程文件夹
             sftp.mkdir(Path::new(&formatted_date), 0o755).expect("Failed to create remote folder.");
         } else {
-            log::info!("Remote folder '{}' already exists.", &formatted_date);
+            log::debug!("Remote folder '{}' already exists.", &formatted_date);
         }
 
         let remote_folder_exists = sftp.stat(Path::new(&remote_folder_name)).is_ok();
