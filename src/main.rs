@@ -49,7 +49,7 @@ struct Cli {
     no_gui: bool,
 
     #[arg(long, help = "Scan additional folder for files.")]
-    folder_path: Option<String>,
+    remote_folder_name: Option<String>,
 
     #[arg(long, help = "Scan USB for files.")]
     usb: bool,
@@ -202,18 +202,88 @@ fn establish_ssh_connection(args: &Cli) -> Session  {
     sess
 }
 
+/**
+    This is a new implementation of `upload_changed_files_deprecated`.  
+    Not only is it able to upload the files to `YYYY-MM-DD/args.remote_folder_name` or `YYYY-MM-DD/$USERNAME`,  
+    but it also keep the relative path of the files to desktop_path, USB drive root, etc.
+
+    ## Args
+    ### changed_files:
+    It is a reference to a vector of tuples, where each tuple contains two elements:  
+    - The first element is the &Path of the file on the local machine.
+    - The second is the root path, by which a relative path is calculated.
+    With the relative path, a directory is created on the remote machine,
+    and the file is uploaded to that directory.
+    ### args: 
+    The arguments passed to the program.
+    ### sess: 
+    The SSH session.
+ */
+fn upload_changed_files(changed_files: &[[&Path; 2]], args: &Cli, sess: &Arc<Mutex<Session>>) {
+
+    // establish sftp session
+    let sftp = {
+        let sess = sess.lock().unwrap();
+        sess.sftp().unwrap()
+    };
+    log::info!("SFTP session established.");
+
+    // create a remote folder for this computer and the date.
+    let remote_folder_name = {
+        let formatted_date = Local::now().format("%Y-%m-%d").to_string();
+
+        let computer_identifier = match args.remote_folder_name.as_ref() {
+            Some(name) => name.to_string(),
+            None => {
+                let home_dir = dirs::home_dir().unwrap();
+                home_dir.file_name().unwrap().to_str().unwrap().to_string()
+            }
+        };
+
+        let remote_folder_name = format!("{}/{}", formatted_date, computer_identifier);
+        log::debug!("Remote folder name for this computer defined as: {remote_folder_name}");
+
+        // check if the remote folder exists. If not, create it.
+        {
+            let remote_folder_exists = sftp.stat(Path::new(&formatted_date)).is_ok();
+            
+            if !remote_folder_exists {
+                log::info!("Remote folder '{}' does not exist, creating it.", &formatted_date);
+                // 创建远程文件夹
+                sftp.mkdir(Path::new(&formatted_date), 0o755).expect("Failed to create remote folder.");
+            } else {
+                log::info!("Remote folder '{}' already exists.", &formatted_date);
+            }
+    
+            let remote_folder_exists = sftp.stat(Path::new(&remote_folder_name)).is_ok();
+            if !remote_folder_exists {
+                log::debug!("Remote folder '{}' does not exist, creating it.", &remote_folder_name);
+                // 创建远程文件夹
+                sftp.mkdir(Path::new(&remote_folder_name), 0o755).expect("Failed to create remote folder.");
+            } else {
+                log::debug!("Remote folder '{}' already exists.", &remote_folder_name);
+            }
+        }
+
+        remote_folder_name
+    };
+
+    // TODO: get relative path of files, create corresponding folders on the remote machine, and upload files.
+}
+
 /// ### This function is deprecated.  
 /// A new function will replace this, which is able to keep the relative path of the files.  
 /// Upload changed files through SFTP.  
 /// determine remote folder name where the files will be uploaded.  
-/// the remote folder name is {YYYY-MM-DD/args.remote_folder}
+/// The remote folder name is {YYYY-MM-DD/args.remote_folder_name} if args.remote_folder_name is Some(),  
+/// otherwise it is {YYYY-MM-DD/$USERNAME}.
 fn upload_changed_files_deprecated(changed_files: Vec<PathBuf>, args: &Cli, sess: &Arc<Mutex<Session>>) {
 
     let formatted_date = Local::now().format("%Y-%m-%d").to_string();
 
     let remote_folder_name = {
 
-        let computer_identifier = match args.folder_path.as_ref() {
+        let computer_identifier = match args.remote_folder_name.as_ref() {
             Some(name) => name.to_string(),
             None => {
                 let home_dir = dirs::home_dir().unwrap();
