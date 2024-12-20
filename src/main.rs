@@ -145,7 +145,22 @@ fn no_gui(desktop_path: &Path, args: Cli) {
 
             file_hashes = new_file_hashes;
 
-            upload_changed_files_deprecated(changed_files, &args, &sess);
+            // upload_changed_files_deprecated(changed_files.clone(), &args, &sess);
+
+            log::info!("Uploading changed files...");
+
+            let files_and_roots_path = {
+                let mut files_and_roots_path: Vec<[&Path; 2]> = vec![];
+                for path in changed_files.iter() {
+                    let root_path = desktop_path;   // TODO: Make this configurable.
+                    files_and_roots_path.push([path, root_path]);
+                }
+                files_and_roots_path
+            };
+
+            upload_files(&files_and_roots_path, &args, &sess);
+
+            log::info!("Upload completed.");
 
         } else {
             log::info!("No changes detected.");
@@ -219,7 +234,7 @@ fn establish_ssh_connection(args: &Cli) -> Session  {
     ### sess: 
     The SSH session.
  */
-fn upload_changed_files(changed_files: &[[&Path; 2]], args: &Cli, sess: &Arc<Mutex<Session>>) {
+fn upload_files(files_and_roots_path: &[[&Path; 2]], args: &Cli, sess: &Arc<Mutex<Session>>) {
 
     // establish sftp session
     let sftp = {
@@ -269,14 +284,59 @@ fn upload_changed_files(changed_files: &[[&Path; 2]], args: &Cli, sess: &Arc<Mut
     };
 
     // TODO: get relative path of files, create corresponding folders on the remote machine, and upload files.
-    for [file_path, root_path] in changed_files.iter() {
+    for [file_path, root_path] in files_and_roots_path.iter() {
         let relative_path = file_path.strip_prefix(root_path).expect("Failed to strip prefix.");
 
         let remote_path_string = format!("{}/{}", remote_folder_name, relative_path.to_str().unwrap());
         let remote_path = Path::new(&remote_path_string);
 
-        log::info!("Uploading file: {} to remote folder: {}", relative_path.display(), remote_path.display())
+        log::info!("Uploading file: {} to remote folder: {}", relative_path.display(), remote_path.display());
+
+        // check if the remote folder exists. If not, create it.
+        {
+            let mut temp_path = remote_path.parent().unwrap();
+            if sftp.stat(temp_path).is_ok() {
+                log::debug!("Remote folder '{}' already exists.", temp_path.display());
+            } else {
+                loop {
+                    if sftp.stat(remote_path.parent().unwrap()).is_ok() {
+                        log::debug!("Remote folder '{}' already exists.", temp_path.display());
+                        break;
+                    }
+                    loop {
+                        let parent_folder = temp_path.parent().unwrap();
+                    if sftp.stat(parent_folder).is_ok() {
+                        log::debug!("Remote folder '{}' already exists.", parent_folder.display());
+                        sftp.mkdir(temp_path, 0o755).expect("Failed to create remote folder.");
+                        log::debug!("Remote folder '{}' created.", temp_path.display());
+                        break;
+                    } else {
+                        log::debug!("Remote folder '{}' does not exist.", parent_folder.display());
+                        temp_path = parent_folder;
+                    }
+                    }
+                    
+                }
+            }
+        }
+
+        // upload file
+        log::info!("Uploading {} to {}", file_path.display(), remote_path.display());
+
+        // open local file
+        log::trace!("Opening local file {}", file_path.display());
+        let mut local_file = fs::File::open(file_path).expect("Failed to open local file.");
+
+        // open remote file
+        log::trace!("Opening remote file {}", remote_path.display());
+        let mut remote_file = sftp.create(remote_path).expect("Failed to create remote file.");
+        
+        io::copy(&mut local_file, &mut remote_file).expect("Failed to copy file.");
+
+        log::info!("Uploaded {} to {}", file_path.display(), remote_path.display());
+
     }
+    log::info!("Finished uploading files.");
 }
 
 /// ### This function is deprecated.  
