@@ -305,15 +305,15 @@ fn upload_files(files_and_roots_path: &[[&Path; 2]], args: &Cli, sess: &Arc<Mute
                     }
                     loop {
                         let parent_folder = temp_path.parent().unwrap();
-                    if sftp.stat(parent_folder).is_ok() {
-                        log::debug!("Remote folder '{}' already exists.", parent_folder.display());
-                        sftp.mkdir(temp_path, 0o755).expect("Failed to create remote folder.");
-                        log::debug!("Remote folder '{}' created.", temp_path.display());
-                        break;
-                    } else {
-                        log::debug!("Remote folder '{}' does not exist.", parent_folder.display());
-                        temp_path = parent_folder;
-                    }
+                        if sftp.stat(parent_folder).is_ok() {
+                            log::debug!("Remote folder '{}' already exists.", parent_folder.display());
+                            sftp.mkdir(temp_path, 0o755).expect("Failed to create remote folder.");
+                            log::debug!("Remote folder '{}' created.", temp_path.display());
+                            break;
+                        } else {
+                            log::debug!("Remote folder '{}' does not exist.", parent_folder.display());
+                            temp_path = parent_folder;
+                        }
                     }
                     
                 }

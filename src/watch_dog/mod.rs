@@ -98,7 +98,7 @@ fn get_file_sha256(path: &Path) -> String {
     let result = hasher.finalize();
     let result = format!("{:x}", result);
 
-    log::debug!("Hash of {} is {}", path.display(), result);
+    log::trace!("Hash of {} is {}", path.display(), result);
     return result;
 }
 
