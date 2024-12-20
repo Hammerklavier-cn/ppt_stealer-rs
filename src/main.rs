@@ -145,7 +145,7 @@ fn no_gui(desktop_path: &Path, args: Cli) {
 
             file_hashes = new_file_hashes;
 
-            upload_changed_files(changed_files, &args, &sess);
+            upload_changed_files_deprecated(changed_files, &args, &sess);
 
         } else {
             log::info!("No changes detected.");
@@ -202,11 +202,12 @@ fn establish_ssh_connection(args: &Cli) -> Session  {
     sess
 }
 
-fn upload_changed_files(changed_files: Vec<PathBuf>, args: &Cli, sess: &Arc<Mutex<Session>>) {
-
-    // Upload changed files through SFTP.
-    // determine remote folder name where the files will be uploaded.
-    // the remote folder name is {YYYY-MM-DD/args.remote_folder}
+/// ### This function is deprecated.  
+/// A new function will replace this, which is able to keep the relative path of the files.  
+/// Upload changed files through SFTP.  
+/// determine remote folder name where the files will be uploaded.  
+/// the remote folder name is {YYYY-MM-DD/args.remote_folder}
+fn upload_changed_files_deprecated(changed_files: Vec<PathBuf>, args: &Cli, sess: &Arc<Mutex<Session>>) {
 
     let formatted_date = Local::now().format("%Y-%m-%d").to_string();
 
