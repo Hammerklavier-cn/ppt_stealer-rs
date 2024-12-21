@@ -19,8 +19,16 @@ mod connection_tools;
 
 #[derive(Parser, Debug)]
 #[command(name = "ppt_stealer-rs", version = "0.2-beta.3")]
-#[command(about, long_about = None)]
-#[command(author)]
+#[command(about, long_about = None, author)]
+#[command(color = clap::ColorChoice::Always)]
+#[command(help_template = "\
+{bin} {version} by {author-with-newline}{about}
+
+{usage-heading} {usage}
+
+{all-args}
+
+{after-help}")]
 #[command(group(
     ArgGroup::new("auth")
         .args(&["password", "key_auth"])
