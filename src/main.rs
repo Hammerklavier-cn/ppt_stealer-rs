@@ -1,5 +1,5 @@
 use chrono::Local;
-use clap::{Parser, ArgGroup};
+use clap::{ArgGroup, Parser, ValueEnum};
 use connection_tools::SshSessionGuard;
 use log;
 use env_logger;
@@ -39,7 +39,7 @@ struct Cli {
     #[arg(short = 'P', long, group = "auth", help = "SSH password")]
     password: Option<String>,
 
-    #[arg(long, default_value_t = false, group = "auth", help = "Use SSH key authentication. If not assigned, password authentication will be used.")]
+    #[arg(long, default_value_t = false, group = "auth", next_line_help = true, help = "Use SSH key authentication. If not assigned, password authentication will be used.")]
     key_auth: bool,
 
     #[arg(long, default_value_t = 30, help = "Refresh interval in seconds")]
@@ -54,8 +54,23 @@ struct Cli {
     #[arg(long, help = "Scan USB for files.")]
     usb: bool,
 
-    #[arg(short = 'L', long, help = "Debug level. Choose from trace, debug, info, warn and error", default_value = "warn")]
-    debug_level: String,
+    #[arg(
+        value_enum, 
+        short = 'L', 
+        long, 
+        next_line_help = true, 
+        help = "Debug level. Choose from trace, debug, info, warn and error", 
+        default_value_t = DebugLevel::Info)]
+    debug_level: DebugLevel,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
+enum DebugLevel {
+    Trace,
+    Debug,
+    Info,
+    Warn,
+    Error,
 }
 
 
@@ -66,7 +81,16 @@ fn main() {
     let args = Cli::parse();
 
     // set debug level
-    std::env::set_var("RUST_LOG", &args.debug_level);
+    std::env::set_var(
+        "RUST_LOG", 
+        match args.debug_level {
+            DebugLevel::Trace => "trace",
+            DebugLevel::Debug => "debug",
+            DebugLevel::Info => "info",
+            DebugLevel::Warn => "warn",
+            DebugLevel::Error => "error",
+        },
+    );
     env_logger::init();
 
     // Set up logging
