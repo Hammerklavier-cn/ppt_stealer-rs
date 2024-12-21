@@ -309,7 +309,14 @@ fn upload_files(files_and_roots_path: &[[&Path; 2]], args: &Cli, sess: &Arc<Mute
 
     // TODO: get relative path of files, create corresponding folders on the remote machine, and upload files.
     for [file_path, root_path] in files_and_roots_path.iter() {
-        let relative_path = file_path.strip_prefix(root_path).expect("Failed to strip prefix.");
+        let relative_path = file_path
+                                    .strip_prefix(root_path.parent()
+                                        .expect(&format!(
+                                            "Failed to get parent folder path of {}",
+                                            root_path.display())
+                                        )
+                                    )
+                                    .expect("Failed to strip prefix.");
 
         let remote_path_string = format!("{}/{}", remote_folder_name, relative_path.to_str().unwrap());
         let remote_path = Path::new(&remote_path_string);
@@ -318,19 +325,21 @@ fn upload_files(files_and_roots_path: &[[&Path; 2]], args: &Cli, sess: &Arc<Mute
 
         // check if the remote folder exists. If not, create it.
         {
-            let mut temp_path = remote_path.parent().unwrap();
-            if sftp.stat(temp_path).is_ok() {
-                log::debug!("Remote folder '{}' already exists.", temp_path.display());
+            let remote_path_dirpath = remote_path.parent().unwrap();
+            if sftp.stat(remote_path_dirpath).is_ok() {
+                log::debug!("Remote folder '{}' already exists.", remote_path_dirpath.display());
             } else {
                 loop {
-                    if sftp.stat(remote_path.parent().unwrap()).is_ok() {
-                        log::debug!("Remote folder '{}' already exists.", temp_path.display());
+                    if sftp.stat(remote_path_dirpath).is_ok() {
+                        log::debug!("Remote folder '{}' already exists.", remote_path_dirpath.display());
                         break;
                     }
+                    let mut temp_path = remote_path_dirpath;
                     loop {
                         let parent_folder = temp_path.parent().unwrap();
                         if sftp.stat(parent_folder).is_ok() {
                             log::debug!("Remote folder '{}' already exists.", parent_folder.display());
+                            log::debug!("Creating remote folder '{}'.", temp_path.display());
                             sftp.mkdir(temp_path, 0o755).expect("Failed to create remote folder.");
                             log::debug!("Remote folder '{}' created.", temp_path.display());
                             break;
