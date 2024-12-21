@@ -11,12 +11,12 @@
 ## 参数
 
 ```plaintext
-Usage: ppt_stealer-rs.exe [OPTIONS]
+Usage: ppt_stealer-rs [OPTIONS]
 
 Options:
-  -i, --ssh-ip <SSH_IP>
+  -i, --ip <IP>
           SSH IP address or domain
-  -p, --ssh-port <SSH_PORT>
+  -p, --port <PORT>
           SSH IP port
   -u, --username <USERNAME>
           SSH username
@@ -28,10 +28,12 @@ Options:
           Refresh interval in seconds [default: 30]
       --no-gui
           Assign no GUI mode
-      --folder-name <FOLDER_NAME>
-          Folder name for files
+      --remote-folder-name <REMOTE_FOLDER_NAME>
+          Scan additional folder for files.
+      --usb
+          Scan USB for files.
   -L, --debug-level <DEBUG_LEVEL>
-          Debug level. Choose from trace, debug, info, warn and error [default: warn]
+          Debug level. [default: info] [possible values: trace, debug, info, warn, error]
   -h, --help
           Print help
   -V, --version
