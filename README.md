@@ -81,7 +81,7 @@ chrono = "0.4.39"
 - [ ] 添加 GTK 客户端
 - [ ] 添加隐藏命令行窗口的模式
 - [ ] 添加对 ftp 服务器的支持
-- [ ] 在云端保留原文件相对桌面的相对路径 (will be supported in v0.4)
+- [ ] 在云端保留原文件相对桌面的相对路径 (will be supported in v0.2 final release)
 - [ ] 添加文件去重功能
 - [ ] 指定路径，代替默认的桌面路径 (will be supported in v0.3)
 - [ ] 指定在目录搜索文件的最小、最大目录深度 (will be supported in v0.3)

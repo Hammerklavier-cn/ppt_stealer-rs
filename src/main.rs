@@ -18,7 +18,7 @@ mod watch_dog;
 mod connection_tools;
 
 #[derive(Parser, Debug)]
-#[command(name = "ppt_stealer-rs", version = "0.2-beta.2")]
+#[command(name = "ppt_stealer-rs", version = "0.2-beta.3")]
 #[command(about, long_about = None)]
 #[command(group(
     ArgGroup::new("auth")
