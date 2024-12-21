@@ -20,6 +20,7 @@ mod connection_tools;
 #[derive(Parser, Debug)]
 #[command(name = "ppt_stealer-rs", version = "0.2-beta.3")]
 #[command(about, long_about = None)]
+#[command(author)]
 #[command(group(
     ArgGroup::new("auth")
         .args(&["password", "key_auth"])
@@ -59,7 +60,7 @@ struct Cli {
         short = 'L', 
         long, 
         next_line_help = true, 
-        help = "Debug level. Choose from trace, debug, info, warn and error", 
+        help = "Debug level.", 
         default_value_t = DebugLevel::Info)]
     debug_level: DebugLevel,
 }
