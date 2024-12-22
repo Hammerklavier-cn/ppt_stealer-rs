@@ -365,9 +365,17 @@ fn upload_files(files_and_roots_path: &[[&Path; 2]], args: &Cli, sess: &Arc<Mute
             file_path.display(), 
             root_path_parent
         );
+        let relative_path = file_path
+                                    .strip_prefix(root_path_parent)
+                                    .expect("Failed to strip prefix.");
         let relative_path = match root_path.parent() {
-            Some(parent) => parent,
-            None => Path::new(&root_path.to_str().unwrap()[0..1])
+            Some(_) => {
+                file_path
+                    .strip_prefix(root_path_parent)
+                    .expect("Failed to strip prefix.")
+                    .to_path_buf()
+            },
+            None => Path::new(&root_path_parent.to_str().unwrap()[0..1]).join(relative_path)
         };
 
         let remote_path_string = format!("{}/{}", remote_folder_name, relative_path.to_str().unwrap());
