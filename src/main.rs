@@ -198,9 +198,8 @@ fn no_gui(desktop_path: &Path, args: Cli) {
             for path in temp_path_bufs.iter() {
                 root_of_paths_map.insert(path.clone(), disk_path.to_path_buf());
             }
-            temp_path_bufs.append(&mut watch_dog::file_moniter(disk_path));
+            path_bufs.append(&mut temp_path_bufs);
         }
-        path_bufs.append(&mut temp_path_bufs);
         
 
         // detect newly plugged in USB devices
@@ -357,15 +356,19 @@ fn upload_files(files_and_roots_path: &[[&Path; 2]], args: &Cli, sess: &Arc<Mute
 
     // TODO: get relative path of files, create corresponding folders on the remote machine, and upload files.
     for [file_path, root_path] in files_and_roots_path.iter() {
-        log::debug!("Stripping prefix of file path {} by root path {}", file_path.display(), root_path.parent().unwrap().display());
-        let relative_path = file_path
-                                    .strip_prefix(root_path.parent()
-                                        .expect(&format!(
-                                            "Failed to get parent folder path of {}",
-                                            root_path.display())
-                                        )
-                                    )
-                                    .expect("Failed to strip prefix.");
+        let root_path_parent = match root_path.parent() {
+            Some(parent) => parent,
+            None => Path::new(root_path.to_str().unwrap())
+        };
+        log::debug!(
+            "Stripping prefix of file path {} by root path {:?}", 
+            file_path.display(), 
+            root_path_parent
+        );
+        let relative_path = match root_path.parent() {
+            Some(parent) => parent,
+            None => Path::new(&root_path.to_str().unwrap()[0..1])
+        };
 
         let remote_path_string = format!("{}/{}", remote_folder_name, relative_path.to_str().unwrap());
         let remote_path = Path::new(&remote_path_string);
