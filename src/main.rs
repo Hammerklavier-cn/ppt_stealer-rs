@@ -104,7 +104,7 @@ fn main() {
 
     // Set up logging
     // print name and version
-    log::info!("ppt_stealer-rs v0.2");
+    log::info!("{} {}, by {}", std::env!("CARGO_PKG_NAME"), std::env!("CARGO_PKG_VERSION"), std::env!("CARGO_PKG_AUTHORS"));
     // print args
     log::info!("Args: {:?}", args);
 
