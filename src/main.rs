@@ -191,10 +191,9 @@ fn no_gui(desktop_path: &Path, args: Cli) {
             root_of_paths_map.insert(path.clone(), desktop_path.to_path_buf());
         }
 
-        let mut temp_path_bufs: Vec<PathBuf> =vec![];
         for disk in disk_list.iter() {
             let disk_path = Path::new(disk);
-            temp_path_bufs = watch_dog::file_moniter(disk_path);
+            let mut temp_path_bufs: Vec<PathBuf> = watch_dog::file_moniter(disk_path);
             for path in temp_path_bufs.iter() {
                 root_of_paths_map.insert(path.clone(), disk_path.to_path_buf());
             }
@@ -365,17 +364,9 @@ fn upload_files(files_and_roots_path: &[[&Path; 2]], args: &Cli, sess: &Arc<Mute
             file_path.display(), 
             root_path_parent
         );
-        let relative_path = file_path
-                                    .strip_prefix(root_path_parent)
-                                    .expect("Failed to strip prefix.");
         let relative_path = match root_path.parent() {
-            Some(_) => {
-                file_path
-                    .strip_prefix(root_path_parent)
-                    .expect("Failed to strip prefix.")
-                    .to_path_buf()
-            },
-            None => Path::new(&root_path_parent.to_str().unwrap()[0..1]).join(relative_path)
+            Some(parent) => parent,
+            None => Path::new(&root_path.to_str().unwrap()[0..1])
         };
 
         let remote_path_string = format!("{}/{}", remote_folder_name, relative_path.to_str().unwrap());
