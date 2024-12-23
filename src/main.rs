@@ -18,7 +18,7 @@ mod watch_dog;
 mod connection_tools;
 
 #[derive(Parser, Debug)]
-#[command(name = "ppt_stealer-rs", version = "0.2-beta.4")]
+#[command(name = "ppt_stealer-rs", version = "0.2-beta.5")]
 #[command(about, long_about = None, author)]
 #[command(color = clap::ColorChoice::Always)]
 #[command(help_template = "\
