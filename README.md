@@ -74,13 +74,14 @@ sha2 = "0.10.8"
 ssh2 = "0.9.4"
 ctrlc = "3.4.5"
 chrono = "0.4.39"
+sysinfo = "0.33.0"
 ```
 
 ## 计划
 
 - [x] 去除缓冲文件 (will be supported in v0.2 final release)
 - [x] 识别 U 盘，并上传其中所有的文档文件 (will be supported in v0.2 final release)
-- [ ] 解决上传时 U 盘弹出导致路径不存在、程序 panic 的问题 (will be supported in v0.2 final release)
+- [x] 解决上传时 U 盘弹出导致路径不存在、程序 panic 的问题 (will be supported in v0.2 final release)
 - [ ] 添加 GTK 客户端
 - [ ] 添加隐藏命令行窗口的模式
 - [ ] 添加对 ftp 服务器的支持
