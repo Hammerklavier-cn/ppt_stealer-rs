@@ -64,25 +64,25 @@ fn is_hidden(entry: &walkdir::DirEntry) -> bool {
 }
 
 /// Get the sha256 hash of all files in a given list.
-pub fn get_hashes<'a>(path_bufs: &[PathBuf]) -> HashMap<PathBuf, String> {
+pub fn get_hashes<'a>(path_bufs: &[PathBuf]) -> Result<HashMap<PathBuf, String>, Box<dyn std::error::Error>> {
     let mut map_of_hashes: std::collections::HashMap<PathBuf, String> = HashMap::new();
 
     for path in path_bufs.iter() {
-        let hash = get_file_sha256(path);
+        let hash = get_file_sha256(path)?;
         map_of_hashes.insert(path.clone(), hash);
     }
 
-    return map_of_hashes;
+    return Ok(map_of_hashes);
 }
 
 /// Get the sha256 hash of a given file.
-fn get_file_sha256(path: &Path) -> String {
+fn get_file_sha256(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
 
     log::debug!("Getting sha256 hash of {}", path.display());
     
     // get file reader
     log::trace!("Opening file {}", path.display());
-    let file = std::fs::File::open(path).expect("Failed to open file");
+    let file = std::fs::File::open(path)?;
     let mut reader = std::io::BufReader::new(file);
 
     // create a hasher instance
@@ -91,7 +91,7 @@ fn get_file_sha256(path: &Path) -> String {
 
     // read the file contents into the hasher
     log::trace!("Reading file contents of {}", path.display());
-    std::io::copy(&mut reader, &mut hasher).expect("Failed to read file");
+    std::io::copy(&mut reader, &mut hasher)?;
 
     // get the final hash value
     log::trace!("Getting final hash value of {}", path.display());
@@ -99,7 +99,8 @@ fn get_file_sha256(path: &Path) -> String {
     let result = format!("{:x}", result);
 
     log::trace!("Hash of {} is {}", path.display(), result);
-    return result;
+    
+    return Ok(result)
 }
 
 

