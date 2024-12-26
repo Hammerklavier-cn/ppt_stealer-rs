@@ -86,7 +86,7 @@ sysinfo = "=0.33.0"
 - [ ] 添加隐藏命令行窗口的模式
 - [ ] 添加对 ftp 服务器的支持
 - [x] 在云端保留原文件相对桌面的相对路径 (will be supported in v0.2 final release)
-- [ ] 添加文件去重功能
+- [x] 检测到远程同名文件内容相同后，取消重复上传
 - [ ] 指定路径，代替默认的桌面路径 (will be supported in v0.3)
 - [ ] 指定在目录搜索文件的最小、最大目录深度 (will be supported in v0.3)
 - [ ] 指定额外的文件格式 (will be supported in v0.3)
