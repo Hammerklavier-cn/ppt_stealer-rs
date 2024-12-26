@@ -76,7 +76,7 @@ pub fn get_hashes<'a>(path_bufs: &[PathBuf]) -> Result<HashMap<PathBuf, String>,
 }
 
 /// Get the sha256 hash of a given file.
-fn get_file_sha256(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+pub fn get_file_sha256(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
 
     log::debug!("Getting sha256 hash of {}", path.display());
     

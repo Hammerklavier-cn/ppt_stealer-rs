@@ -5,6 +5,7 @@ use log;
 use env_logger;
 use ssh2::Session;
 use std::collections::HashMap;
+use std::io::Read;
 use std::sync::{Arc, Mutex};
 use std::{fs, io};
 use std::net::TcpStream;
@@ -312,8 +313,8 @@ fn establish_ssh_connection(args: &Cli) -> Session  {
 fn upload_files(files_and_roots_path: &[[&Path; 2]], args: &Cli, sess: &Arc<Mutex<Session>>) {
 
     // establish sftp session
+    let sess = sess.lock().unwrap();
     let sftp = {
-        let sess = sess.lock().unwrap();
         sess.sftp().unwrap()
     };
     log::info!("SFTP session established.");
@@ -419,6 +420,58 @@ fn upload_files(files_and_roots_path: &[[&Path; 2]], args: &Cli, sess: &Arc<Mute
 
         // upload file
         log::info!("Uploading {} to {}", file_path.display(), remote_path.display());
+        
+        // if remote file exists, check if the two files are the same.
+        log::debug!("Comparing local and remote file.");
+        {
+            if sftp.stat(remote_path).is_ok() {
+                // get remote hash
+                let mut channel = sess.channel_session().unwrap();
+                let cmd = format!("sha256sum '{}' | awk '{{print $1}}'", remote_path.to_str().unwrap().replace("\\", "/"));
+                log::debug!("Executing command: '{}'", cmd);
+                channel.exec(&cmd).unwrap();
+
+                let mut remote_hash = String::new();
+                channel.read_to_string(&mut remote_hash).expect("Failed to read remote operation result.");
+                remote_hash = remote_hash.trim().to_string();
+
+                channel.wait_close();
+
+                match channel.exit_status() {
+                    Ok(0) =>{
+                        log::debug!("Hash of remote file {} is {}", remote_path.display(), remote_hash)
+                    }
+                    Ok(code) => {
+                        log::warn!("Failed to get hash of remote file: Maybe false syntax? Error code: {}", code);
+                        continue;
+                    }
+                    Err(err) => {
+                        log::warn!("Failed to get hash of remote file: Maybe connection lost? Error info: {}", err);
+                        continue;
+                    }
+                }
+
+                // get local hash
+                let local_hash = match watch_dog::get_file_sha256(file_path) {
+                    Ok(hash) => {
+                        log::debug!("Hash of local file {} is {}", file_path.display(), hash);
+                        hash
+                    },
+                    Err(err) => {
+                        log::warn!("Failed to get hash of local file {}: Maybe the file is removed? Error info: {}", file_path.display(), err);
+                        continue;
+                    }
+                };
+
+                // compare hashes
+                if remote_hash == local_hash {
+                    log::info!("Remote file {} is the same as local file {}, skip uploading.", remote_path.display(), file_path.display());
+                    continue;
+                } else {
+                    log::info!("Remote file {} is different from local file {}, uploading.", remote_path.display(), file_path.display());
+                }
+            }
+        }
 
         // open local file
         log::trace!("Opening local file {}", file_path.display());

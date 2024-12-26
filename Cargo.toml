@@ -1,6 +1,6 @@
 [package]
 name = "ppt_stealer-rs"
-version = "0.2.6"
+version = "0.2.7"
 edition = "2021"
 authors = ["Hammerklavier"]
 description = "A tool to steal PowerPoint files from desktop to remote SSH server."
