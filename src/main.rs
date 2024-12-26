@@ -464,7 +464,7 @@ fn upload_files(files_and_roots_path: &[[&Path; 2]], args: &Cli, sess: &Arc<Mute
 /// determine remote folder name where the files will be uploaded.  
 /// The remote folder name is {YYYY-MM-DD/args.remote_folder_name} if args.remote_folder_name is Some(),  
 /// otherwise it is {YYYY-MM-DD/$USERNAME}.
-fn upload_changed_files_deprecated(changed_files: Vec<PathBuf>, args: &Cli, sess: &Arc<Mutex<Session>>) {
+fn _upload_changed_files_deprecated(changed_files: Vec<PathBuf>, args: &Cli, sess: &Arc<Mutex<Session>>) {
 
     let formatted_date = Local::now().format("%Y-%m-%d").to_string();
 
