@@ -1,5 +1,5 @@
 use chrono::Local;
-use clap::{ArgGroup, Parser, ValueEnum};
+use clap::{ArgGroup, Args, Parser, ValueEnum};
 use connection_tools::SshSessionGuard;
 use log;
 use env_logger;
@@ -81,6 +81,23 @@ enum DebugLevel {
     Info,
     Warn,
     Error,
+}
+
+#[derive(Args, Debug)]
+struct ScanParams {
+    #[arg(long, short='m', help="Minimum depth of file (included)")]
+    min_depth: Option<usize>,
+
+    #[arg(long, short='M', help="Maximum depth of file (included)")]
+    max_depth: Option<usize>,
+
+    #[arg(long, short='a', help="Additional paths to scan")]
+    add_paths: Option<Vec<String>>,
+
+    #[arg(long, short='r', help="Regex pattern to match files")]
+    regex: Option<String>,
+
+    //#[arg(long, )]
 }
 
 
@@ -321,42 +338,48 @@ fn upload_files(files_and_roots_path: &[[&Path; 2]], args: &Cli, sess: &Arc<Mute
 
     // create a remote folder for this computer and the date.
     let remote_folder_name = {
-        let formatted_date = Local::now().format("%Y-%m-%d").to_string();
-
-        let computer_identifier = match args.remote_folder_name.as_ref() {
-            Some(name) => name.to_string(),
+        match &args.remote_folder_name {
+            Some(name) => name.clone(),
             None => {
-                let home_dir = dirs::home_dir().unwrap();
-                home_dir.file_name().unwrap().to_str().unwrap().to_string()
-            }
-        };
+                let formatted_date = Local::now().format("%Y-%m-%d").to_string();
 
-        let remote_folder_name = format!("{}/{}", formatted_date, computer_identifier);
-        log::debug!("Remote folder name for this computer defined as: {remote_folder_name}");
+                let computer_identifier = match args.remote_folder_name.as_ref() {
+                    Some(name) => name.to_string(),
+                    None => {
+                        let home_dir = dirs::home_dir().unwrap();
+                        home_dir.file_name().unwrap().to_str().unwrap().to_string()
+                    }
+                };
 
-        // check if the remote folder exists. If not, create it.
-        {
-            let remote_folder_exists = sftp.stat(Path::new(&formatted_date)).is_ok();
+                let remote_folder_name = format!("{}/{}", formatted_date, computer_identifier);
+                log::debug!("Remote folder name for this computer defined as: {remote_folder_name}");
+
+                // check if the remote folder exists. If not, create it.
+                {
+                    let remote_folder_exists = sftp.stat(Path::new(&formatted_date)).is_ok();
+                    
+                    if !remote_folder_exists {
+                        log::debug!("Remote folder '{}' does not exist, creating it.", &formatted_date);
+                        // 创建远程文件夹
+                        sftp.mkdir(Path::new(&formatted_date), 0o755).expect("Failed to create remote folder.");
+                    } else {
+                        log::debug!("Remote folder '{}' already exists.", &formatted_date);
+                    }
             
-            if !remote_folder_exists {
-                log::debug!("Remote folder '{}' does not exist, creating it.", &formatted_date);
-                // 创建远程文件夹
-                sftp.mkdir(Path::new(&formatted_date), 0o755).expect("Failed to create remote folder.");
-            } else {
-                log::debug!("Remote folder '{}' already exists.", &formatted_date);
-            }
-    
-            let remote_folder_exists = sftp.stat(Path::new(&remote_folder_name)).is_ok();
-            if !remote_folder_exists {
-                log::debug!("Remote folder '{}' does not exist, creating it.", &remote_folder_name);
-                // 创建远程文件夹
-                sftp.mkdir(Path::new(&remote_folder_name), 0o755).expect("Failed to create remote folder.");
-            } else {
-                log::debug!("Remote folder '{}' already exists.", &remote_folder_name);
+                    let remote_folder_exists = sftp.stat(Path::new(&remote_folder_name)).is_ok();
+                    if !remote_folder_exists {
+                        log::debug!("Remote folder '{}' does not exist, creating it.", &remote_folder_name);
+                        // 创建远程文件夹
+                        sftp.mkdir(Path::new(&remote_folder_name), 0o755).expect("Failed to create remote folder.");
+                    } else {
+                        log::debug!("Remote folder '{}' already exists.", &remote_folder_name);
+                    }
+                }
+
+                remote_folder_name
             }
         }
 
-        remote_folder_name
     };
 
     // TODO: get relative path of files, create corresponding folders on the remote machine, and upload files.
@@ -435,7 +458,7 @@ fn upload_files(files_and_roots_path: &[[&Path; 2]], args: &Cli, sess: &Arc<Mute
                 channel.read_to_string(&mut remote_hash).expect("Failed to read remote operation result.");
                 remote_hash = remote_hash.trim().to_string();
 
-                channel.wait_close();
+                channel.wait_close().unwrap();
 
                 match channel.exit_status() {
                     Ok(0) =>{
