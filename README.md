@@ -10,7 +10,9 @@
 
 ## 项目优势
 
-使用原生 Rust 编写，性能强劲，内存安全；cargo 一键编译，方便快捷。
+- 使用原生 Rust 编写，性能强劲，内存安全
+- cargo 一键编译，方便快捷
+- 支持 Windows, macOS, Linux 等多个操作系统
 
 ## 参数
 
@@ -86,6 +88,7 @@ sysinfo = "=0.33.0"
 - [x] 去除缓冲文件 (will be supported in v0.2 final release)
 - [x] 识别 U 盘，并上传其中所有的文档文件 (will be supported in v0.2 final release)
 - [x] 解决上传时 U 盘弹出导致路径不存在、程序 panic 的问题 (will be supported in v0.2 final release)
+- [ ] 添加将文件复制到本地特定目录的功能 (will be supported in v0.3)
 - [ ] 添加 GTK 客户端
 - [ ] 添加隐藏命令行窗口的模式
 - [ ] 添加对 ftp 服务器的支持
