@@ -97,7 +97,15 @@ struct ScanParams {
     #[arg(long, short='r', help="Regex pattern to match files")]
     regex: Option<String>,
 
-    //#[arg(long, )]
+
+    #[arg(
+        long, 
+        help="Assign file formats", 
+        default_value = "ppt pptx odp doc docx odt xls xlsx ods csv txt md",
+        value_delimiter = ' '
+    )]
+    formats: Vec<String>,
+
 }
 
 
@@ -339,7 +347,9 @@ fn upload_files(files_and_roots_path: &[[&Path; 2]], args: &Cli, sess: &Arc<Mute
     // create a remote folder for this computer and the date.
     let remote_folder_name = {
         match &args.remote_folder_name {
-            Some(name) => name.clone(),
+            Some(name) => {
+                name.clone()
+            },
             None => {
                 let formatted_date = Local::now().format("%Y-%m-%d").to_string();
 
