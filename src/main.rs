@@ -365,6 +365,8 @@ fn upload_files(files_and_roots_path: &[[&Path; 2]], args: &Cli, sess: &Arc<Mute
                 log::debug!("Remote folder name for this computer defined as: {remote_folder_name}");
 
                 // check if the remote folder exists. If not, create it.
+                // The following code is commented out because it is not needed.
+                /* 
                 {
                     let remote_folder_exists = sftp.stat(Path::new(&formatted_date)).is_ok();
                     
@@ -385,7 +387,7 @@ fn upload_files(files_and_roots_path: &[[&Path; 2]], args: &Cli, sess: &Arc<Mute
                         log::debug!("Remote folder '{}' already exists.", &remote_folder_name);
                     }
                 }
-
+                */
                 remote_folder_name
             }
         }
@@ -437,6 +439,12 @@ fn upload_files(files_and_roots_path: &[[&Path; 2]], args: &Cli, sess: &Arc<Mute
                         let parent_folder = temp_path.parent().unwrap();
                         if sftp.stat(parent_folder).is_ok() {
                             log::debug!("Remote folder '{}' already exists.", parent_folder.display());
+                            log::debug!("Creating remote folder '{}'.", temp_path.display());
+                            sftp.mkdir(temp_path, 0o755).expect("Failed to create remote folder.");
+                            log::debug!("Remote folder '{}' created.", temp_path.display());
+                            break;
+                        } else if parent_folder.to_str().unwrap() == "" {
+                            log::debug!("There is no parent folder of '{}'.Just create it", temp_path.display());
                             log::debug!("Creating remote folder '{}'.", temp_path.display());
                             sftp.mkdir(temp_path, 0o755).expect("Failed to create remote folder.");
                             log::debug!("Remote folder '{}' created.", temp_path.display());
