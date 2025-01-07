@@ -99,14 +99,14 @@ enum DebugLevel {
 
 #[derive(Args, Debug, Clone)]
 #[group(required = false, multiple = true)]
-#[command(
+/* #[command(
     group(
         ArgGroup::new("filter")
             .args(&["regex", "formats"])
             .required(false)
             .multiple(false)
     )
-)]
+)] */
 struct ScanParams {
     #[arg(long, short = 'm', help = "Minimum depth of file (included)")]
     min_depth: Option<usize>,
@@ -231,7 +231,7 @@ fn no_gui(desktop_path: &Path, args: &Cli) {
         let mut path_bufs: Vec<PathBuf> = vec![];
 
         let mut temp_path_bufs: Vec<PathBuf> =
-            watch_dog::file_moniter(desktop_path, &args.scan_params.formats);
+            watch_dog::file_moniter(desktop_path, &args.scan_params.formats, args.scan_params.regex.as_deref());
 
         path_bufs.append(&mut temp_path_bufs);
 
@@ -244,7 +244,7 @@ fn no_gui(desktop_path: &Path, args: &Cli) {
         for disk in disk_list.iter() {
             let disk_path = Path::new(disk);
             let mut temp_path_bufs: Vec<PathBuf> =
-                watch_dog::file_moniter(disk_path, &args.scan_params.formats);
+                watch_dog::file_moniter(disk_path, &args.scan_params.formats, args.scan_params.regex.as_deref());
             for path in temp_path_bufs.iter() {
                 root_of_paths_map.insert(path.clone(), disk_path.to_path_buf());
             }
