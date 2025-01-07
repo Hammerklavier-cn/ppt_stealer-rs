@@ -99,14 +99,6 @@ enum DebugLevel {
 
 #[derive(Args, Debug, Clone)]
 #[group(required = false, multiple = true)]
-#[command(
-    group(
-        ArgGroup::new("filter")
-            .args(&["regex", "formats"])
-            .required(false)
-            .multiple(false)
-    )
-)]
 struct ScanParams {
     #[arg(long, short = 'm', help = "Minimum depth of file (included)")]
     min_depth: Option<usize>,
