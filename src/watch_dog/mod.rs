@@ -1,18 +1,33 @@
+use regex::Regex;
 use sha2::{Digest, Sha256};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
 };
 use walkdir::WalkDir;
-use regex::Regex;
 
 /// scan desktop for new ppt files
-pub fn file_moniter(path: &Path, exts: &[String], pattern: Option<&str>) -> Vec<PathBuf> {
+pub fn file_moniter(
+    path: &Path,
+    exts: &[String],
+    pattern: Option<&str>,
+    min_depth: Option<usize>,
+    max_depth: Option<usize>,
+) -> Vec<PathBuf> {
     log::info!("Start scanning {}", path.display());
 
     let mut selected_files: Vec<PathBuf> = vec![];
 
-    let walker = WalkDir::new(path).into_iter();
+    let walker = {
+        let mut temp_walkdir = WalkDir::new(path);
+        if let Some(min_depth) = min_depth {
+            temp_walkdir = temp_walkdir.min_depth(min_depth);
+        };
+        if let Some(max_depth) = max_depth {
+            temp_walkdir = temp_walkdir.max_depth(max_depth);
+        };
+        temp_walkdir.into_iter()
+    };
 
     //for entry in path.read_dir().expect("read_dir call failed") {
 
@@ -45,20 +60,20 @@ pub fn file_moniter(path: &Path, exts: &[String], pattern: Option<&str>) -> Vec<
                     selected_files.push(path);
                     continue;
                 }
-            } 
+            }
             if let Some(pattern) = pattern {
                 log::trace!("Checking {} against {}", path.display(), pattern);
-                let re = match Regex::new(pattern){
+                let re = match Regex::new(pattern) {
                     Ok(re) => re,
                     Err(_) => {
                         log::error!("Invalid regex pattern: {}", pattern);
                         continue;
-                    },
+                    }
                 };
                 if re.is_match(path.file_name().unwrap().to_str().unwrap()) {
                     log::trace!("Found {}", path.display());
                     selected_files.push(path);
-                } 
+                }
             } else {
                 log::debug!("Skipping file {}", path.display());
             }
@@ -66,7 +81,7 @@ pub fn file_moniter(path: &Path, exts: &[String], pattern: Option<&str>) -> Vec<
             log::trace!("Skipping directory {}", path.display());
         }
     }
-    log::debug!("Found {} files", selected_files.len());
+    log::info!("Found {} files", selected_files.len());
 
     return selected_files;
 }
