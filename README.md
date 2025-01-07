@@ -17,7 +17,7 @@
 ## 参数
 
 ```plaintext
-Usage: ppt_stealer-rs [OPTIONS]
+Usage: ppt_stealer-rs.exe [OPTIONS]
 
 Options:
   -i, --ip <IP>
@@ -29,7 +29,8 @@ Options:
   -P, --password <PASSWORD>
           SSH password
       --key-auth
-          Use SSH key authentication. If not assigned, password authentication will be used.
+          Use SSH key authentication. If not assigned, password authenticatio
+n will be used.
       --refresh-interval <REFRESH_INTERVAL>
           Refresh interval in seconds [default: 30]
       --no-gui
@@ -39,7 +40,19 @@ Options:
       --usb
           Scan USB for files.
   -L, --debug-level <DEBUG_LEVEL>
-          Debug level. [default: info] [possible values: trace, debug, info, warn, error]
+          Debug level. [default: info] [possible values: trace, debug, info,
+warn, error]
+  -m, --min-depth <MIN_DEPTH>
+          Minimum depth of file (included)
+  -M, --max-depth <MAX_DEPTH>
+          Maximum depth of file (included)
+  -a, --add-paths <ADD_PATHS>
+          Additional paths to scan
+  -r, --regex <REGEX>
+          Regex pattern to match files
+      --formats <FORMATS>
+          Assign file formats [default: "ppt pptx odp doc docx odt xls xlsx o
+ds csv txt md"]
   -h, --help
           Print help
   -V, --version
@@ -95,6 +108,6 @@ sysinfo = "=0.33.0"
 - [x] 在云端保留原文件相对桌面的相对路径 (will be supported in v0.2 final release)
 - [x] 检测到远程同名文件内容相同后，取消重复上传
 - [ ] 指定路径，代替默认的桌面路径 (will be supported in v0.3)
-- [ ] 指定在目录搜索文件的最小、最大目录深度 (will be supported in v0.3)
+- [x] 指定在目录搜索文件的最小、最大目录深度 (will be supported in v0.3)
 - [x] 指定额外的文件格式 (will be supported in v0.3)
 - [x] 通过正则表达式指定文件 (will be supported in v0.4)
