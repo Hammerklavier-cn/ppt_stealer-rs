@@ -49,7 +49,9 @@ struct Cli {
     #[arg(short = 'P', long, group = "auth", help = "SSH password")]
     password: Option<String>,
 
-    #[arg(long, default_value_t = false, group = "auth", next_line_help = true, help = "Use SSH key authentication. If not assigned, password authentication will be used.")]
+    #[arg(long, default_value_t = false, group = "auth", 
+        next_line_help = true, 
+        help = "Use SSH key authentication. If not assigned, password authentication will be used.")]
     key_auth: bool,
 
     #[arg(long, default_value_t = 30, help = "Refresh interval in seconds")]
@@ -72,6 +74,9 @@ struct Cli {
         help = "Debug level.", 
         default_value_t = DebugLevel::Info)]
     debug_level: DebugLevel,
+
+    #[command(flatten)]
+    scan_params: ScanParams,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
@@ -83,7 +88,8 @@ enum DebugLevel {
     Error,
 }
 
-#[derive(Args, Debug)]
+#[derive(Args, Debug, Clone)]
+#[group(required = false, multiple = true)]
 struct ScanParams {
     #[arg(long, short='m', help="Minimum depth of file (included)")]
     min_depth: Option<usize>,
@@ -156,14 +162,14 @@ fn main() {
     println!("Hello, world!");
 
     if args.no_gui {
-        no_gui(&desktop_path, args);
+        no_gui(&desktop_path, &args);
     } else {
         // start GUI
         log::error!("GUI mode is still under development.");
     }
 }
 
-fn no_gui(desktop_path: &Path, args: Cli) {
+fn no_gui(desktop_path: &Path, args: &Cli) {
     log::info!("No GUI mode on.");
 
     let sess: Arc<Mutex<Session>> = Arc::new(Mutex::new(establish_ssh_connection(&args)));
@@ -206,7 +212,7 @@ fn no_gui(desktop_path: &Path, args: Cli) {
 
         let mut path_bufs: Vec<PathBuf> = vec![];
 
-        let mut temp_path_bufs: Vec<PathBuf> = watch_dog::file_moniter(desktop_path);
+        let mut temp_path_bufs: Vec<PathBuf> = watch_dog::file_moniter(desktop_path, &args.scan_params.formats);
 
         path_bufs.append(&mut temp_path_bufs);
 
@@ -218,7 +224,7 @@ fn no_gui(desktop_path: &Path, args: Cli) {
 
         for disk in disk_list.iter() {
             let disk_path = Path::new(disk);
-            let mut temp_path_bufs: Vec<PathBuf> = watch_dog::file_moniter(disk_path);
+            let mut temp_path_bufs: Vec<PathBuf> = watch_dog::file_moniter(disk_path, &args.scan_params.formats);
             for path in temp_path_bufs.iter() {
                 root_of_paths_map.insert(path.clone(), disk_path.to_path_buf());
             }

@@ -3,7 +3,7 @@ use walkdir::WalkDir;
 use sha2::{Sha256, Digest};
 
 /// scan desktop for new ppt files
-pub fn file_moniter(path: &Path) -> Vec<PathBuf> {
+pub fn file_moniter(path: &Path, exts: &[String]) -> Vec<PathBuf> {
 
     log::info!("Start scanning {}", path.display());
 
@@ -11,10 +11,10 @@ pub fn file_moniter(path: &Path) -> Vec<PathBuf> {
 
     let walker = WalkDir::new(path)
         .into_iter();
-        
+
 
     //for entry in path.read_dir().expect("read_dir call failed") {
-    
+
     for entry in walker
                             .filter_entry(|e| !is_hidden(e))
                             .filter_map(|e| e.ok()) { // exclude hidden files
@@ -27,7 +27,7 @@ pub fn file_moniter(path: &Path) -> Vec<PathBuf> {
             if path.file_name().unwrap().to_str().unwrap().starts_with("~$") {
                 continue;
             }
-
+            // TODO: use customised extensions instead of hardcoding
             if let Some(ext) = path.extension() {
                 let ext_str = ext.to_str().unwrap().to_lowercase();
                 match ext_str.as_str() {
@@ -79,7 +79,7 @@ pub fn get_hashes<'a>(path_bufs: &[PathBuf]) -> Result<HashMap<PathBuf, String>,
 pub fn get_file_sha256(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
 
     log::debug!("Getting sha256 hash of {}", path.display());
-    
+
     // get file reader
     log::trace!("Opening file {}", path.display());
     let file = std::fs::File::open(path)?;
@@ -99,12 +99,12 @@ pub fn get_file_sha256(path: &Path) -> Result<String, Box<dyn std::error::Error>
     let result = format!("{:x}", result);
 
     log::trace!("Hash of {} is {}", path.display(), result);
-    
+
     return Ok(result)
 }
 
 
-/** Compare SHA256 hashes of files in two HashMaps, 
+/** Compare SHA256 hashes of files in two HashMaps,
     and return a vector of files that altered. */
 pub fn get_changed_files(
     old_map: &HashMap<PathBuf, String>, new_map: &HashMap<PathBuf, String>
