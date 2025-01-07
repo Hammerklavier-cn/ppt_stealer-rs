@@ -140,11 +140,12 @@ fn main() {
 
     // Set up logging
     // print name and version
-    log::info!(
-        "{} {}, by {}",
+    println!(
+        "{} {}, by {}\n{}",
         std::env!("CARGO_PKG_NAME"),
         std::env!("CARGO_PKG_VERSION"),
-        std::env!("CARGO_PKG_AUTHORS")
+        std::env!("CARGO_PKG_AUTHORS"),
+        std::env!("CARGO_PKG_DESCRIPTION")
     );
     // print args
     log::info!("Args: {:?}", args);
@@ -170,8 +171,6 @@ fn main() {
         }
     };
     log::info!("Desktop path: {}", desktop_path.display());
-
-    println!("Hello, world!");
 
     if args.no_gui {
         no_gui(&desktop_path, &args);
