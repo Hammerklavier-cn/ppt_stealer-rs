@@ -96,5 +96,5 @@ sysinfo = "=0.33.0"
 - [x] 检测到远程同名文件内容相同后，取消重复上传
 - [ ] 指定路径，代替默认的桌面路径 (will be supported in v0.3)
 - [ ] 指定在目录搜索文件的最小、最大目录深度 (will be supported in v0.3)
-- [ ] 指定额外的文件格式 (will be supported in v0.3)
-- [ ] 通过正则表达式指定文件 (will be supported in v0.4)
+- [x] 指定额外的文件格式 (will be supported in v0.3)
+- [x] 通过正则表达式指定文件 (will be supported in v0.4)
