@@ -4,9 +4,26 @@ version = "0.3.0"
 edition = "2021"
 authors = ["Hammerklavier"]
 description = "A tool to steal PowerPoint files from desktop to remote SSH server."
+readme = "README.md"
 
-[cargo.release]
-trace = false
+[profile.dev]
+lto = false
+opt-level = 0
+overflow-checks = true
+
+[profile.release]
+lto = true
+opt-level = 3
+panic = "abort"
+debug = 0
+overflow-checks = false
+codegen-units = 4
+
+[profile.minsize]
+inherits = "release"
+lto = "fat"
+opt-level = "z"
+panic = "abort"
 
 [dependencies]
 dirs = "=5.0.1"
