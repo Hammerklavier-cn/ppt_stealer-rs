@@ -4,12 +4,13 @@ use std::{
     path::{Path, PathBuf},
 };
 use walkdir::WalkDir;
+use regex::Regex;
 
 /// scan desktop for new ppt files
-pub fn file_moniter(path: &Path, exts: &[String]) -> Vec<PathBuf> {
+pub fn file_moniter(path: &Path, exts: &[String], pattern: Option<&str>) -> Vec<PathBuf> {
     log::info!("Start scanning {}", path.display());
 
-    let mut document_files: Vec<PathBuf> = vec![];
+    let mut selected_files: Vec<PathBuf> = vec![];
 
     let walker = WalkDir::new(path).into_iter();
 
@@ -32,44 +33,42 @@ pub fn file_moniter(path: &Path, exts: &[String]) -> Vec<PathBuf> {
                 .unwrap()
                 .starts_with("~$")
             {
+                log::trace!("Skipping temp file {}", path.display());
                 continue;
             }
+            log::trace!("{} is not temp file", path.display());
             // TODO: use customised extensions instead of hardcoding
             if let Some(ext) = path.extension() {
                 let ext_string = ext.to_str().unwrap().to_lowercase();
                 if exts.contains(&ext_string) {
                     log::trace!("Found {}", path.display());
-                    document_files.push(path);
+                    selected_files.push(path);
+                    continue;
                 }
+            } 
+            if let Some(pattern) = pattern {
+                log::trace!("Checking {} against {}", path.display(), pattern);
+                let re = match Regex::new(pattern){
+                    Ok(re) => re,
+                    Err(_) => {
+                        log::error!("Invalid regex pattern: {}", pattern);
+                        continue;
+                    },
+                };
+                if re.is_match(path.file_name().unwrap().to_str().unwrap()) {
+                    log::trace!("Found {}", path.display());
+                    selected_files.push(path);
+                } 
+            } else {
+                log::debug!("Skipping file {}", path.display());
             }
-            /*
-            if let Some(ext) = path.extension() {
-                let ext_str = ext.to_str().unwrap().to_lowercase();
-                match ext_str.as_str() {
-                    "ppt" | "pptx" | "odp" => {
-                        log::trace!("Found powerpoint/impress file {}", path.display());
-                        document_files.push(path);
-                    }
-                    "doc" | "docx" | "odt" => {
-                        log::trace!("Found document/writer file {}", path.display());
-                        document_files.push(path);
-                    }
-                    "xls" | "xlsx" | "ods" => {
-                        log::trace!("Found excel/calc file {}", path.display());
-                        document_files.push(path);
-                    }
-                    "pdf" => {
-                        log::trace!("Found pdf file {}", path.display());
-                        document_files.push(path);
-                    }
-                    _ => {continue;}
-                }
-            } */
+        } else {
+            log::trace!("Skipping directory {}", path.display());
         }
     }
-    log::debug!("Found {} files", document_files.len());
+    log::debug!("Found {} files", selected_files.len());
 
-    return document_files;
+    return selected_files;
 }
 
 fn is_hidden(entry: &walkdir::DirEntry) -> bool {
