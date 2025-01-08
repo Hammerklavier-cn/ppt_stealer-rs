@@ -29,8 +29,7 @@ Options:
   -P, --password <PASSWORD>
           SSH password
       --key-auth
-          Use SSH key authentication. If not assigned, password authenticatio
-n will be used.
+          Use SSH key authentication. If not assigned, password authentication will be used.
       --refresh-interval <REFRESH_INTERVAL>
           Refresh interval in seconds [default: 30]
       --no-gui
@@ -40,8 +39,9 @@ n will be used.
       --usb
           Scan USB for files.
   -L, --debug-level <DEBUG_LEVEL>
-          Debug level. [default: info] [possible values: trace, debug, info,
-warn, error]
+          Debug level. [default: info] [possible values: trace, debug, info, warn, error]
+      --desktop-path <DESKTOP_PATH>
+          Custimised desktop path
   -m, --min-depth <MIN_DEPTH>
           Minimum depth of file (included)
   -M, --max-depth <MAX_DEPTH>
@@ -51,8 +51,7 @@ warn, error]
   -r, --regex <REGEX>
           Regex pattern to match files
       --formats <FORMATS>
-          Assign file formats [default: "ppt pptx odp doc docx odt xls xlsx o
-ds csv txt md"]
+          Assign file formats [default: "ppt pptx odp doc docx odt xls xlsx ods csv txt md"]
   -h, --help
           Print help
   -V, --version
@@ -94,6 +93,7 @@ ssh2 = "=0.9.4"
 ctrlc = "=3.4.5"
 chrono = "=0.4.39"
 sysinfo = "=0.33.0"
+regex = "=1.11.1"
 ```
 
 ## 计划
@@ -101,13 +101,14 @@ sysinfo = "=0.33.0"
 - [x] 去除缓冲文件 (will be supported in v0.2 final release)
 - [x] 识别 U 盘，并上传其中所有的文档文件 (will be supported in v0.2 final release)
 - [x] 解决上传时 U 盘弹出导致路径不存在、程序 panic 的问题 (will be supported in v0.2 final release)
-- [ ] 添加将文件复制到本地特定目录的功能 (will be supported in v0.3)
+- [ ] 添加将文件复制到本地特定目录的功能 (will be supported in v0.3.2)
+- [x] 添加额外的本地目录 (will be supported in v0.3)
 - [ ] 添加 GTK 客户端
 - [ ] 添加隐藏命令行窗口的模式
 - [ ] 添加对 ftp 服务器的支持
 - [x] 在云端保留原文件相对桌面的相对路径 (will be supported in v0.2 final release)
 - [x] 检测到远程同名文件内容相同后，取消重复上传
-- [ ] 指定路径，代替默认的桌面路径 (will be supported in v0.3)
+- [x] 指定路径，代替默认的桌面路径 (will be supported in v0.3)
 - [x] 指定在目录搜索文件的最小、最大目录深度 (will be supported in v0.3)
 - [x] 指定额外的文件格式 (will be supported in v0.3)
 - [x] 通过正则表达式指定文件 (will be supported in v0.4)
