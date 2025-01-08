@@ -93,6 +93,7 @@ ssh2 = "=0.9.4"
 ctrlc = "=3.4.5"
 chrono = "=0.4.39"
 sysinfo = "=0.33.0"
+regex = "=1.11.1"
 ```
 
 ## 计划
@@ -100,8 +101,8 @@ sysinfo = "=0.33.0"
 - [x] 去除缓冲文件 (will be supported in v0.2 final release)
 - [x] 识别 U 盘，并上传其中所有的文档文件 (will be supported in v0.2 final release)
 - [x] 解决上传时 U 盘弹出导致路径不存在、程序 panic 的问题 (will be supported in v0.2 final release)
-- [ ] 添加将文件复制到本地特定目录的功能 (will be supported in v0.3)
-- [ ] 添加额外的本地目录 (will be supported in v0.3)
+- [ ] 添加将文件复制到本地特定目录的功能 (will be supported in v0.3.2)
+- [x] 添加额外的本地目录 (will be supported in v0.3)
 - [ ] 添加 GTK 客户端
 - [ ] 添加隐藏命令行窗口的模式
 - [ ] 添加对 ftp 服务器的支持
