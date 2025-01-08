@@ -100,6 +100,9 @@ enum DebugLevel {
 #[derive(Args, Debug, Clone)]
 #[group(required = false, multiple = true)]
 struct ScanParams {
+    #[arg(long, help = "Custimised desktop path")]
+    desktop_path: Option<String>,
+
     #[arg(long, short = 'm', help = "Minimum depth of file (included)")]
     min_depth: Option<usize>,
 
@@ -151,24 +154,36 @@ fn main() {
     log::info!("Args: {:?}", args);
 
     // get desktop path
-    let desktop_path = match dirs::desktop_dir() {
-        Some(path) => path,
-        None => {
-            // ask user for desktop path
-            let mut path = String::new();
-            std::io::stdin()
-                .read_line(&mut path)
-                .expect("Failed to read line");
-            let path = PathBuf::from_str(path.trim()).unwrap();
-            // check if the given desktop path is valid
+    let desktop_path = match args.scan_params.desktop_path.as_deref() {
+        Some(path_string) => {
+            let path = PathBuf::from_str(path_string).unwrap();
             match path.is_dir() {
                 true => path,
                 false => {
-                    log::error!("{} is invalid desktop path", path.display());
+                    log::error!("An invalid directory path is assigned! {}", path_string);
                     std::process::exit(1);
                 }
             }
         }
+        None => match dirs::desktop_dir() {
+            Some(path) => path,
+            None => {
+                // ask user for desktop path
+                let mut path = String::new();
+                std::io::stdin()
+                    .read_line(&mut path)
+                    .expect("Failed to read line");
+                let path = PathBuf::from_str(path.trim()).unwrap();
+                // check if the given desktop path is valid
+                match path.is_dir() {
+                    true => path,
+                    false => {
+                        log::error!("{} is invalid desktop path", path.display());
+                        std::process::exit(1);
+                    }
+                }
+            }
+        },
     };
     log::info!("Desktop path: {}", desktop_path.display());
 
