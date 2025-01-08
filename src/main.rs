@@ -217,6 +217,27 @@ fn no_gui(desktop_path: &Path, args: &Cli) {
     })
     .expect("Error setting Ctrl+C handler.");
 
+    // check customed paths and generate Path s
+    let custom_paths: Option<Vec<PathBuf>> = match &args.scan_params.add_paths {
+        Some(path_strings) => {
+            let mut paths: Vec<PathBuf> = vec![];
+            for path_string in path_strings.iter() {
+                let path = PathBuf::from_str(path_string).unwrap();
+                match path.is_dir() {
+                    true => {
+                        paths.push(path);
+                    }
+                    false => {
+                        log::error!("{} is not an valid dir path!", path_string);
+                        std::process::exit(1)
+                    }
+                }
+            }
+            Some(paths)
+        }
+        None => None,
+    };
+
     log::info!("Start monitering files...");
 
     let mut file_hashes: HashMap<PathBuf, String> = HashMap::new();
@@ -234,8 +255,10 @@ fn no_gui(desktop_path: &Path, args: &Cli) {
 
         let mut root_of_paths_map: HashMap<PathBuf, PathBuf> = HashMap::new();
 
-        let mut path_bufs: Vec<PathBuf> = vec![];
+        // containing paths which shall be scanned.
+        let mut target_dir_path_bufs: Vec<PathBuf> = vec![];
 
+        log::info!("Scanning desktop files...");
         let mut temp_path_bufs: Vec<PathBuf> = watch_dog::file_moniter(
             desktop_path,
             &args.scan_params.formats,
@@ -244,14 +267,15 @@ fn no_gui(desktop_path: &Path, args: &Cli) {
             args.scan_params.max_depth,
         );
 
-        path_bufs.append(&mut temp_path_bufs);
+        target_dir_path_bufs.append(&mut temp_path_bufs);
 
-        let cloned_path_bufs = path_bufs.clone();
+        let cloned_path_bufs = target_dir_path_bufs.clone();
 
         for path in cloned_path_bufs.iter() {
             root_of_paths_map.insert(path.clone(), desktop_path.to_path_buf());
         }
 
+        log::info!("Scanning usb files...");
         for disk in disk_list.iter() {
             let disk_path = Path::new(disk);
             let mut temp_path_bufs: Vec<PathBuf> = watch_dog::file_moniter(
@@ -264,14 +288,27 @@ fn no_gui(desktop_path: &Path, args: &Cli) {
             for path in temp_path_bufs.iter() {
                 root_of_paths_map.insert(path.clone(), disk_path.to_path_buf());
             }
-            path_bufs.append(&mut temp_path_bufs);
+            target_dir_path_bufs.append(&mut temp_path_bufs);
         }
 
-        // detect newly plugged in USB devices
+        log::info!("Scanning customised paths...");
+        if let Some(custom_paths) = &custom_paths {
+            for custom_path in custom_paths.iter() {
+                let temp_path_bufs: Vec<PathBuf> = watch_dog::file_moniter(
+                    custom_path,
+                    &args.scan_params.formats,
+                    args.scan_params.regex.as_deref(),
+                    args.scan_params.min_depth,
+                    args.scan_params.max_depth,
+                );
+                for temp_path_buf in temp_path_bufs {
+                    root_of_paths_map.insert(temp_path_buf.clone(), custom_path.to_path_buf());
+                    target_dir_path_bufs.push(temp_path_buf);
+                }
+            }
+        };
 
-        // let paths: Vec<&Path> = path_bufs.iter().map(|p: &PathBuf| p.as_path()).collect::<Vec<&Path>>();
-
-        let new_file_hashes = match watch_dog::get_hashes(&path_bufs) {
+        let new_file_hashes = match watch_dog::get_hashes(&target_dir_path_bufs) {
             Ok(hashes) => hashes,
             Err(e) => {
                 log::warn!(
