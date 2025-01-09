@@ -431,6 +431,8 @@ fn establish_ssh_connection(args: &Cli) -> Session {
    The SSH session.
 */
 fn upload_files(files_and_roots_path: &[[&Path; 2]], args: &Cli, sess: &Arc<Mutex<Session>>) {
+    // TODO: Replace `args` with specific parameters!
+    //       And don't forget to update the documentation!
     // establish sftp session
     let sess = sess.lock().unwrap();
     let sftp = { sess.sftp().unwrap() };
@@ -438,6 +440,7 @@ fn upload_files(files_and_roots_path: &[[&Path; 2]], args: &Cli, sess: &Arc<Mute
 
     // create a remote folder for this computer and the date.
     let remote_folder_name = {
+        // TODO: Remove the duplicated `match` case.
         match &args.remote_folder_name {
             Some(name) => name.clone(),
             None => {
@@ -456,30 +459,6 @@ fn upload_files(files_and_roots_path: &[[&Path; 2]], args: &Cli, sess: &Arc<Mute
                     "Remote folder name for this computer defined as: {remote_folder_name}"
                 );
 
-                // check if the remote folder exists. If not, create it.
-                // The following code is commented out because it is not needed.
-                /*
-                {
-                    let remote_folder_exists = sftp.stat(Path::new(&formatted_date)).is_ok();
-
-                    if !remote_folder_exists {
-                        log::debug!("Remote folder '{}' does not exist, creating it.", &formatted_date);
-                        // 创建远程文件夹
-                        sftp.mkdir(Path::new(&formatted_date), 0o755).expect("Failed to create remote folder.");
-                    } else {
-                        log::debug!("Remote folder '{}' already exists.", &formatted_date);
-                    }
-
-                    let remote_folder_exists = sftp.stat(Path::new(&remote_folder_name)).is_ok();
-                    if !remote_folder_exists {
-                        log::debug!("Remote folder '{}' does not exist, creating it.", &remote_folder_name);
-                        // 创建远程文件夹
-                        sftp.mkdir(Path::new(&remote_folder_name), 0o755).expect("Failed to create remote folder.");
-                    } else {
-                        log::debug!("Remote folder '{}' already exists.", &remote_folder_name);
-                    }
-                }
-                */
                 remote_folder_name
             }
         }
