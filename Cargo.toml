@@ -27,6 +27,7 @@ panic = "abort"
 
 [dependencies]
 dirs = "=5.0.1"
+gethostname = "=0.5.0"
 clap = { version = "=4.5.23", features = ["derive"] }
 log = "=0.4.22"
 env_logger = "=0.9"

@@ -2,6 +2,7 @@ use chrono::Local;
 use clap::{ArgGroup, Args, Parser, ValueEnum};
 use connection_tools::SshSessionGuard;
 use env_logger;
+use gethostname::gethostname;
 use log;
 use ssh2::Session;
 use std::collections::HashMap;
@@ -202,7 +203,6 @@ fn no_gui(desktop_path: &Path, args: &Cli) {
 
     let _sess_guard = SshSessionGuard { session: &sess };
 
-    // TODO: Have SshSessionGuard replace the mutex.
     // make sure ssh connection closed after Ctrl+C.
     ctrlc::set_handler({
         let sess = Arc::clone(&sess);
@@ -335,8 +335,20 @@ fn no_gui(desktop_path: &Path, args: &Cli) {
                 let mut files_and_roots_path: Vec<[&Path; 2]> = vec![];
                 for path in changed_files.iter() {
                     log::debug!("Get root path of {}", path.display());
-                    let root_path = root_of_paths_map.get(path.as_path()).unwrap(); // TODO: Make this configurable.
-                    files_and_roots_path.push([path.as_path(), root_path]);
+                    let root_path = match root_of_paths_map.get(path.as_path()) {
+                        Some(path) => path,
+                        None => {
+                            log::warn!(
+                                "Failed to find the root of {} from the dict!
+                                There must be vulnerability in the code. Please
+                                create an issue for the project. Now assume it to
+                                be empty.",
+                                path.display()
+                            );
+                            Path::new("")
+                        }
+                    };
+                    files_and_roots_path.push([&path, root_path]);
                 }
                 files_and_roots_path
             };
@@ -440,13 +452,12 @@ fn upload_files(files_and_roots_path: &[[&Path; 2]], args: &Cli, sess: &Arc<Mute
 
     // create a remote folder for this computer and the date.
     let remote_folder_name = {
-        // TODO: Remove the duplicated `match` case.
         match &args.remote_folder_name {
             Some(name) => name.clone(),
             None => {
                 let formatted_date = Local::now().format("%Y-%m-%d").to_string();
 
-                let computer_identifier = match args.remote_folder_name.as_ref() {
+                let computer_identifier = match gethostname().to_str() {
                     Some(name) => name.to_string(),
                     None => {
                         let home_dir = dirs::home_dir().unwrap();
@@ -464,16 +475,15 @@ fn upload_files(files_and_roots_path: &[[&Path; 2]], args: &Cli, sess: &Arc<Mute
         }
     };
 
-    // TODO: get relative path of files, create corresponding folders on the remote machine, and upload files.
     for [file_path, root_path] in files_and_roots_path.iter() {
         let root_path_parent = match root_path.parent() {
             Some(parent) => parent,
             None => Path::new(root_path.to_str().unwrap()),
         };
         log::debug!(
-            "Stripping prefix of file path {} by root path {:?}",
+            "Stripping prefix of file path {} by root path {}",
             file_path.display(),
-            root_path_parent
+            root_path_parent.display()
         );
         let relative_path = file_path
             .strip_prefix(root_path_parent)
