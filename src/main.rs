@@ -353,7 +353,7 @@ fn no_gui(desktop_path: &Path, args: &Cli) {
                 files_and_roots_path
             };
 
-            upload_files(&files_and_roots_path, &args, &sess);
+            upload_files(&files_and_roots_path, &sess, &args.remote_folder_name);
 
             log::info!("Upload completed.");
         } else {
@@ -437,14 +437,15 @@ fn establish_ssh_connection(args: &Cli) -> Session {
    - The second is the path of the root folder, by which a relative path is calculated.
    With the relative path, a directory is created on the remote machine,
    and the file is uploaded to that directory.
-   ### args:
-   The arguments passed to the program.
    ### sess:
    The SSH session.
+   ### remote_folder_name: Customised remote folder name. Optional.
 */
-fn upload_files(files_and_roots_path: &[[&Path; 2]], args: &Cli, sess: &Arc<Mutex<Session>>) {
-    // TODO: Replace `args` with specific parameters!
-    //       And don't forget to update the documentation!
+fn upload_files(
+    files_and_roots_path: &[[&Path; 2]],
+    sess: &Arc<Mutex<Session>>,
+    remote_folder_name: &Option<String>,
+) {
     // establish sftp session
     let sess = sess.lock().unwrap();
     let sftp = { sess.sftp().unwrap() };
@@ -452,7 +453,7 @@ fn upload_files(files_and_roots_path: &[[&Path; 2]], args: &Cli, sess: &Arc<Mute
 
     // create a remote folder for this computer and the date.
     let remote_folder_name = {
-        match &args.remote_folder_name {
+        match remote_folder_name {
             Some(name) => name.clone(),
             None => {
                 let formatted_date = Local::now().format("%Y-%m-%d").to_string();
