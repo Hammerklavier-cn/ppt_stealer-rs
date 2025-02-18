@@ -12,16 +12,15 @@ opt-level = 0
 overflow-checks = true
 
 [profile.release]
-lto = true
+lto = "fat"
 opt-level = 3
 panic = "abort"
 debug = 0
 overflow-checks = false
-codegen-units = 4
+codegen-units = 1
 
 [profile.minsize]
 inherits = "release"
-lto = "fat"
 opt-level = "z"
 panic = "abort"
 
