@@ -426,9 +426,7 @@ fn establish_ssh_connection(args: &Cli) -> Session {
 }
 
 /**
-   This is a new implementation of `upload_changed_files_deprecated`.
-   Not only is it able to upload the files to `YYYY-MM-DD/args.remote_folder_name` or `YYYY-MM-DD/$USERNAME`,
-   but it also keep the relative path of the files to desktop_path, USB drive root, etc.
+   Upload files to `YYYY-MM-DD/remote_folder_name` if `remote_folder_name` is not `None`.
 
    ## Args
    ### changed_files:
@@ -438,8 +436,9 @@ fn establish_ssh_connection(args: &Cli) -> Session {
    With the relative path, a directory is created on the remote machine,
    and the file is uploaded to that directory.
    ### sess:
-   The SSH session.
-   ### remote_folder_name: Customised remote folder name. Optional.
+   Shared SSH session.
+   ### remote_folder_name:
+   Customised remote folder name. Optional.
 */
 fn upload_files(
     files_and_roots_path: &[[&Path; 2]],
