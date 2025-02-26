@@ -1,6 +1,6 @@
 use chrono::Local;
 use clap::{ArgGroup, Args, Parser, ValueEnum};
-use connection_tools::SshSessionGuard;
+// use connection_tools::SshSessionGuard;
 use env_logger;
 use gethostname::gethostname;
 use log;
@@ -201,19 +201,21 @@ fn no_gui(desktop_path: &Path, args: &Cli) {
 
     let sess: Arc<Mutex<Session>> = Arc::new(Mutex::new(establish_ssh_connection(&args)));
 
-    let _sess_guard = SshSessionGuard { session: &sess };
-
     // make sure ssh connection closed after Ctrl+C.
-    ctrlc::set_handler({
-        let sess = Arc::clone(&sess);
-        move || {
-            log::info!("Ctrl+C detected. Exiting...");
-            let sess = sess.lock().unwrap();
-            sess.disconnect(None, "CtrlC detected", None)
-                .expect("Failed to disconnect from SSH server.");
-            log::info!("SSH session closed.");
-            std::process::exit(0);
-        }
+    // ctrlc::set_handler({
+    //     let sess = Arc::clone(&sess);
+    //     move || {
+    //         log::info!("Ctrl+C detected. Exiting...");
+    //         let sess = sess.lock().unwrap();
+    //         sess.disconnect(None, "CtrlC detected", None)
+    //             .expect("Failed to disconnect from SSH server.");
+    //         log::info!("SSH session closed.");
+    //         std::process::exit(0);
+    //     }
+    // })
+    ctrlc::set_handler(|| {
+        log::info!("Ctrl+C detected. Exiting...");
+        std::process::exit(0);
     })
     .expect("Error setting Ctrl+C handler.");
 
@@ -393,9 +395,10 @@ fn establish_ssh_connection(args: &Cli) -> Session {
     sess.set_tcp_stream(tcp);
     sess.handshake().unwrap();
     if args.key_auth {
+        log::warn!("Key authentication is not ready yet!");
         let private_key_path = dirs::home_dir().unwrap().join(".ssh/id_rsa");
         log::debug!(
-            "Authenticating with rivate key: {}",
+            "Authenticating with private key: {}",
             private_key_path.display()
         );
 
@@ -408,16 +411,16 @@ fn establish_ssh_connection(args: &Cli) -> Session {
             None,
         )
         .expect("Failed to authenticate with SSH key.");
-    } else {
+    } else if let Some(password) = &args.password {
         sess.userauth_password(
             args.username
                 .as_ref()
                 .expect("On no GUI mode, SSH username is required!"),
-            args.password
-                .as_ref()
-                .expect("On no GUI mode, SSH password is required!"),
+            password,
         )
         .expect("Failed to authenticate with SSH password.");
+    } else {
+        // Feature: Authentication with OpenSSH public key
     }
     assert!(sess.authenticated());
     log::info!("SSH Authentication successful.");
@@ -475,7 +478,7 @@ fn upload_files(
         }
     };
 
-    for [file_path, root_path] in files_and_roots_path.iter() {
+    for &[file_path, root_path] in files_and_roots_path.iter() {
         let root_path_parent = match root_path.parent() {
             Some(parent) => parent,
             None => Path::new(root_path.to_str().unwrap()),
@@ -575,7 +578,7 @@ fn upload_files(
                     "sha256sum '{}' | awk '{{print $1}}'",
                     remote_path.to_str().unwrap().replace("\\", "/")
                 );
-                log::debug!("Executing command: '{}'", cmd);
+                log::trace!("Executing command: '{}'", cmd);
                 channel.exec(&cmd).unwrap();
 
                 let mut remote_hash = String::new();
@@ -588,7 +591,7 @@ fn upload_files(
 
                 match channel.exit_status() {
                     Ok(0) => {
-                        log::debug!(
+                        log::trace!(
                             "Hash of remote file {} is {}",
                             remote_path.display(),
                             remote_hash
@@ -610,7 +613,7 @@ fn upload_files(
                 // get local hash
                 let local_hash = match watch_dog::get_file_sha256(file_path) {
                     Ok(hash) => {
-                        log::debug!("Hash of local file {} is {}", file_path.display(), hash);
+                        log::trace!("Hash of local file {} is {}", file_path.display(), hash);
                         hash
                     }
                     Err(err) => {
@@ -621,14 +624,14 @@ fn upload_files(
 
                 // compare hashes
                 if remote_hash == local_hash {
-                    log::info!(
+                    log::debug!(
                         "Remote file {} is the same as local file {}, skip uploading.",
                         remote_path.display(),
                         file_path.display()
                     );
                     continue;
                 } else {
-                    log::info!(
+                    log::debug!(
                         "Remote file {} is different from local file {}, uploading.",
                         remote_path.display(),
                         file_path.display()
@@ -666,6 +669,11 @@ fn upload_files(
         };
 
         // copy file
+        log::trace!(
+            "Copying {} to {}...",
+            (*file_path).display(),
+            remote_path.display()
+        );
         match io::copy(&mut local_file, &mut remote_file) {
             Ok(_) => {
                 log::info!(
