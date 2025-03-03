@@ -275,20 +275,22 @@ fn no_gui(desktop_path: &Path, args: &Cli) {
             root_of_paths_map.insert(path.clone(), desktop_path.to_path_buf());
         }
 
-        log::info!("Scanning usb files...");
-        for disk in disk_list.iter() {
-            let disk_path = Path::new(disk);
-            let mut temp_path_bufs: Vec<PathBuf> = watch_dog::file_moniter(
-                disk_path,
-                &args.scan_params.formats,
-                args.scan_params.regex.as_deref(),
-                args.scan_params.min_depth,
-                args.scan_params.max_depth,
-            );
-            for path in temp_path_bufs.iter() {
-                root_of_paths_map.insert(path.clone(), disk_path.to_path_buf());
+        if args.usb {
+            log::info!("Scanning usb files...");
+            for disk in disk_list.iter() {
+                let disk_path = Path::new(disk);
+                let mut temp_path_bufs: Vec<PathBuf> = watch_dog::file_moniter(
+                    disk_path,
+                    &args.scan_params.formats,
+                    args.scan_params.regex.as_deref(),
+                    args.scan_params.min_depth,
+                    args.scan_params.max_depth,
+                );
+                for path in temp_path_bufs.iter() {
+                    root_of_paths_map.insert(path.clone(), disk_path.to_path_buf());
+                }
+                target_dir_path_bufs.append(&mut temp_path_bufs);
             }
-            target_dir_path_bufs.append(&mut temp_path_bufs);
         }
 
         log::info!("Scanning customised paths...");
