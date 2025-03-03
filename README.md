@@ -103,7 +103,7 @@ regex = "=1.11.1"
 - [x] 解决上传时 U 盘弹出导致路径不存在、程序 panic 的问题 (will be supported in v0.2 final release)
 - [ ] 添加将文件复制到本地特定目录的功能 (will be supported in v0.3.2)
 - [x] 添加额外的本地目录 (will be supported in v0.3)
-- [ ] 添加 GTK 客户端
+- [ ] 添加基于 Slint 客户端
 - [ ] 添加隐藏命令行窗口的模式
 - [ ] 添加对 ftp 服务器的支持
 - [x] 在云端保留原文件相对桌面的相对路径 (will be supported in v0.2 final release)
