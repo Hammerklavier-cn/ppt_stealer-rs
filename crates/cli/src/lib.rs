@@ -36,48 +36,25 @@ pub enum DebugLevel {
     Error,
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
+pub enum UploadTarget {
+    Local,
+    SshServer,
+    SmbServer,
+    FtpServer,
+}
+
 #[derive(Subcommand, Debug)]
 pub enum Commands {
     /// Start the slint GUI application.
     Gui,
     /// Start the command-line interface.
-
-    #[command(group(
-        ArgGroup::new("auth")
-            .args(&["password", "key_auth"])
-            .required(false)
-            .multiple(false)
-    ))]
     NoGui {
-        #[arg(short = 'i', long, help = "SSH IP address or domain")]
-        ip: String,
+        #[command(flatten)]
+        server_params: ServerParams,
 
-        #[arg(short = 'p', long, help = "SSH IP port", default_value_t = 22)]
-        port: i64,
-
-        #[arg(short = 'u', long, help = "SSH username")]
-        username: String,
-
-        #[arg(short = 'P', long, group = "auth", help = "SSH password")]
-        password: Option<String>,
-
-        #[arg(
-            long,
-            default_value_t = false,
-            group = "auth",
-            next_line_help = true,
-            help = "Use SSH key authentication. If not assigned, password authentication will be used."
-        )]
-        key_auth: bool,
-
-        #[arg(long, default_value_t = 30, help = "Refresh interval in seconds")]
-        refresh_interval: u64,
-
-        #[arg(long, help = "Scan additional folder for files.")]
-        remote_folder_name: Option<String>,
-
-        #[arg(long, help = "Scan USB for files.")]
-        usb: bool,
+        #[command(flatten)]
+        target_params: TargetParams,
 
         #[command(flatten)]
         scan_params: ScanParams,
@@ -85,8 +62,60 @@ pub enum Commands {
 }
 
 #[derive(Args, Debug, Clone)]
+#[command(group(
+    ArgGroup::new("auth")
+        .args(&["password", "key_auth"])
+        .required(false)
+        .multiple(false)
+))]
+#[group(required = false, multiple = true)]
+pub struct ServerParams {
+    #[arg(short = 'i', long, help = "Server IP address or domain")]
+    pub ip: Option<String>,
+
+    #[arg(short = 'p', long, help = "Service IP port")]
+    pub port: Option<i64>,
+
+    #[arg(short = 'u', long, help = "Service username")]
+    pub username: Option<String>,
+
+    #[arg(short = 'P', long, group = "auth", help = "Service password")]
+    pub password: Option<String>,
+
+    #[arg(
+        long,
+        default_value_t = false,
+        group = "auth",
+        next_line_help = true,
+        help = "Use SSH key authentication. If not assigned, password authentication will be used."
+    )]
+    pub key_auth: bool,
+}
+
+#[derive(Args, Debug, Clone)]
+#[group(required = false, multiple = true)]
+pub struct TargetParams {
+    #[arg(
+        long,
+        help = "Upload files to a ssh server",
+        default_value = "local",
+        value_delimiter = ' '
+    )]
+    pub upload_targets: Vec<UploadTarget>,
+
+    #[arg(long, help = "Scan additional folder for files.")]
+    pub target_folder_name: Option<String>,
+}
+
+#[derive(Args, Debug, Clone)]
 #[group(required = false, multiple = true)]
 pub struct ScanParams {
+    #[arg(long, help = "Scan USB for files.")]
+    usb: bool,
+
+    #[arg(long, default_value_t = 30, help = "Refresh interval in seconds")]
+    refresh_interval: u64,
+
     #[arg(long, help = "Custimised desktop path")]
     desktop_path: Option<String>,
 

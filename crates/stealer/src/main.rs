@@ -1,3 +1,6 @@
+use std::process::exit;
+
+use cli;
 use cli::{get_args, shared_function, DebugLevel};
 
 fn main() {
@@ -19,4 +22,17 @@ fn main() {
         },
     );
     env_logger::init();
+
+    // determine running mode
+    match args.command {
+        Some(t) => match t {
+            cli::Commands::Gui => exit(0),
+            cli::Commands::NoGui {
+                server_params,
+                target_params,
+                scan_params,
+            } => exit(0),
+        },
+        None => exit(0),
+    }
 }
