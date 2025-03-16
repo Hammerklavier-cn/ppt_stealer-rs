@@ -1,6 +1,6 @@
+use log;
 use std::process::exit;
 
-use cli;
 use cli::{get_args, shared_function, DebugLevel};
 
 fn main() {
@@ -26,13 +26,24 @@ fn main() {
     // determine running mode
     match args.command {
         Some(t) => match t {
-            cli::Commands::Gui => exit(0),
+            cli::Commands::Gui => {
+                log::info!("GUI mode selected.");
+                // TODO: Implement GUI mode
+                log::error!("GUI is not supported yet!");
+                exit(1)
+            }
             cli::Commands::NoGui {
                 server_params,
                 target_params,
                 scan_params,
-            } => exit(0),
+            } => {
+                log::info!("No GUI mode selected.");
+            }
         },
-        None => exit(0),
-    }
+        None => {
+            log::info!("No subcommand specified. GUI mode is chosen by default.");
+            log::error!("GUI is not supported yet!");
+            exit(1)
+        }
+    };
 }
