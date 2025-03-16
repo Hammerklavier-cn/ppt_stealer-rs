@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/cli", "crates/stealer"]
+members = ["crates/cli", "crates/stealer", "crates/stealer-cli"]
 exclude = ["crates/old"]
 default-members = ["crates/stealer"]
 
