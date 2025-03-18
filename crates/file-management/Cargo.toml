@@ -1,0 +1,13 @@
+[package]
+name = "file-management"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description.workspace = true
+readme.workspace = true
+
+
+[dependencies]
+log = "0.4.26"
+env_logger = "0.11.7"
+ssh2 = "0.9.5"

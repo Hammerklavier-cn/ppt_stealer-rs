@@ -94,6 +94,13 @@ pub struct ServerParams {
 
 #[derive(Args, Debug, Clone)]
 #[group(required = false, multiple = true)]
+pub struct LocalParams {
+    #[arg(long, help = "Local directory where you want to store the files.")]
+    pub copy_to: String,
+}
+
+#[derive(Args, Debug, Clone)]
+#[group(required = false, multiple = true)]
 pub struct TargetParams {
     #[arg(
         long,
@@ -111,25 +118,25 @@ pub struct TargetParams {
 #[group(required = false, multiple = true)]
 pub struct ScanParams {
     #[arg(long, help = "Scan USB for files.")]
-    usb: bool,
+    pub usb: bool,
 
     #[arg(long, default_value_t = 30, help = "Refresh interval in seconds")]
-    refresh_interval: u64,
+    pub refresh_interval: u64,
 
     #[arg(long, help = "Custimised desktop path")]
-    desktop_path: Option<String>,
+    pub desktop_path: Option<String>,
 
     #[arg(long, short = 'm', help = "Minimum depth of file (included)")]
-    min_depth: Option<usize>,
+    pub min_depth: Option<usize>,
 
     #[arg(long, short = 'M', help = "Maximum depth of file (included)")]
-    max_depth: Option<usize>,
+    pub max_depth: Option<usize>,
 
     #[arg(long, short = 'a', help = "Additional paths to scan")]
-    add_paths: Option<Vec<String>>,
+    pub add_paths: Option<Vec<String>>,
 
     #[arg(long, short = 'r', help = "Regex pattern to match files")]
-    regex: Option<String>,
+    pub regex: Option<String>,
 
     #[arg(
         long,
@@ -137,7 +144,7 @@ pub struct ScanParams {
         default_value = "ppt pptx odp doc docx odt xls xlsx ods csv txt md",
         value_delimiter = ' '
     )]
-    formats: Vec<String>,
+    pub formats: Vec<String>,
 }
 
 /// This is a shared function for debugging purposes.

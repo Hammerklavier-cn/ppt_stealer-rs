@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/cli", "crates/stealer", "crates/stealer-cli"]
+members = ["crates/cli", "crates/file-management", "crates/stealer", "crates/stealer-cli"]
 exclude = ["crates/old"]
 default-members = ["crates/stealer"]
 
@@ -9,6 +9,6 @@ default-members = ["crates/stealer"]
 name = "ppt_stealer-rs"
 version = "0.3.2-alpha2"                                                            # 统一版本号
 authors = ["Hammerklavier-cn"]
-edition = "2021"
+edition = "2024"
 description = "A tool to steal PowerPoint files from desktop to remote SSH server."
 readme = "README.md"
