@@ -97,24 +97,29 @@ impl<'a> RemoteAuthentication for SshKeyAuthentication<'a> {
     }
 }
 
-pub struct SshTargetManager<'a, T: RemoteAuthentication> {
+pub struct SshTargetManager<'a> {
     pub base_path: &'a Path,
-    pub login_params: T,
+    pub login_params: Box<dyn RemoteAuthentication + 'a>,
     pub connection: ssh2::Session,
 }
 
-impl<'a, T: RemoteAuthentication> SshTargetManager<'a, T> {
-    pub fn new(base_path: Option<&'a str>, login_params: T, connection: ssh2::Session) -> Self {
+impl<'a> SshTargetManager<'a> {
+    pub fn new<T: RemoteAuthentication + 'a>(
+        base_path: Option<&'a str>,
+        login_params: T,
+        connection: ssh2::Session,
+    ) -> Self {
         login_params.authenticate().unwrap();
         Self {
             base_path: Path::new(base_path.unwrap_or("default")),
-            login_params,
+            login_params: Box::new(login_params),
             connection,
         }
     }
 }
-impl<'a, T: RemoteAuthentication> TargetManager for SshTargetManager<'a, T> {
+
+impl<'a> TargetManager for SshTargetManager<'a> {
     fn get_base_path(&self) -> &str {
-        return self.base_path.to_str().unwrap();
+        self.base_path.to_str().unwrap()
     }
 }
