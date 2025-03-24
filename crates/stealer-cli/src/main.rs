@@ -4,8 +4,8 @@ mod watch_dog;
 
 use cli::{Commands, DebugLevel, ScanParams, ServerParams, TargetParams, UploadTarget, get_args};
 use file_management::{
-    LocalTargetManager, Login, SshKeyAuthentication, SshPasswordAuthentication, SshTargetManager,
-    TargetManager,
+    LocalTargetManager, RemoteAuthentication, SshKeyAuthentication, SshPasswordAuthentication,
+    SshTargetManager, TargetManager,
 };
 
 fn main() {
@@ -67,33 +67,25 @@ pub fn headless(scan_params: ScanParams, server_params: ServerParams, target_par
     // determine base directory
 
     // connect to target file manager
-    let target_managers: Vec<Box<dyn TargetManager>> = vec![];
+    let mut target_managers: Vec<Box<dyn TargetManager>> = vec![];
     for upload_target in target_params.upload_targets {
         let target_manager = match upload_target {
             UploadTarget::Local => Box::new(LocalTargetManager::new(
                 target_params.target_folder_name.as_deref(),
-            )),
-            UploadTarget::SshServer => Box::new(SshTargetManager::new(
-                target_params.target_folder_name.as_deref(),
-                {
-                    if let Some(passwd) = &server_params.password {
-                        SshPasswordAuthentication {
-                            ip: &server_params.ip.unwrap(),
-                            port: server_params.port.unwrap_or(22),
-                            username: &server_params.username.unwrap(),
-                            password: passwd,
-                        }
-                    } else {
-                        SshKeyAuthentication {
-                            ip: &server_params.ip.unwrap(),
-                            port: server_params.port.unwrap_or(22),
-                            username: &server_params.username.unwrap(),
-                            pem_key: &server_params.private_key_path.unwrap(),
-                        }
-                    }
-                },
-                {},
-            )),
+            )) as Box<dyn TargetManager>,
+            UploadTarget::SshServer => {
+                let login_params = match &server_params.password {
+                    Some(passwd) => SshPasswordAuthentication {
+                        ip: &server_params.ip.unwrap(),
+                        port: server_params.port.unwrap(),
+                        username: &server_params.username.unwrap(),
+                        password: &passwd,
+                    },
+                    None => panic!("KeyAuth is currently unsupported!"),
+                };
+                Box::new(SshTargetManager::new(Some("base_path"), login_params))
+            }
+            UploadTarget::SmbServer | UploadTarget::FtpServer => panic!("Not supported yet!"),
         };
         target_managers.push(target_manager);
     }
