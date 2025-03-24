@@ -17,29 +17,42 @@
 ## 参数
 
 ```plaintext
-Usage: ppt_stealer-rs.exe [OPTIONS]
+Usage: stealer.exe [OPTIONS] [COMMAND]
+
+Commands:
+  gui     Start the slint GUI application
+  no-gui  Start the command-line interface
+  help    Print this message or the help of the given subcommand(s)
+
+Options:
+  -L, --debug-level <DEBUG_LEVEL>
+          Debug level. [default: info] [possible values: trace, debug, info, warn, error]
+  -h, --help
+          Print help
+  -V, --version
+          Print version
+
+Usage: stealer.exe no-gui [OPTIONS]
 
 Options:
   -i, --ip <IP>
-          SSH IP address or domain
+          Server IP address or domain
   -p, --port <PORT>
-          SSH IP port
+          Service IP port
   -u, --username <USERNAME>
-          SSH username
+          Service username
   -P, --password <PASSWORD>
-          SSH password
+          Service password
       --key-auth
           Use SSH key authentication. If not assigned, password authentication will be used.
-      --refresh-interval <REFRESH_INTERVAL>
-          Refresh interval in seconds [default: 30]
-      --no-gui
-          Assign no GUI mode
-      --remote-folder-name <REMOTE_FOLDER_NAME>
+      --upload-targets <UPLOAD_TARGETS>
+          Upload files to a ssh server [default: local] [possible values: local, ssh-server, smb-server, ftp-server]
+      --target-folder-name <TARGET_FOLDER_NAME>
           Scan additional folder for files.
       --usb
           Scan USB for files.
-  -L, --debug-level <DEBUG_LEVEL>
-          Debug level. [default: info] [possible values: trace, debug, info, warn, error]
+      --refresh-interval <REFRESH_INTERVAL>
+          Refresh interval in seconds [default: 30]
       --desktop-path <DESKTOP_PATH>
           Custimised desktop path
   -m, --min-depth <MIN_DEPTH>
@@ -54,8 +67,6 @@ Options:
           Assign file formats [default: "ppt pptx odp doc docx odt xls xlsx ods csv txt md"]
   -h, --help
           Print help
-  -V, --version
-          Print version
 ```
 
 ## 关于 SSH 服务器……
@@ -70,7 +81,7 @@ Options:
 
 注：各个分支（包括 main）的版本并不稳定，请使用发行版或标签的源代码进行编译。
 
-1. 安装 rustc 和 cargo  
+1. 安装 rustc 和 cargo
    前往 [rust-lang.org/install](https://www.rust-lang.org/tools/install) 下载、安装 Rust 工具链。
 2. cd <项目根目录>
 3. cargo build --release
