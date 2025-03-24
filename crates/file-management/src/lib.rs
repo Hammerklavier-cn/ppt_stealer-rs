@@ -47,22 +47,20 @@ pub trait TargetManager {
 pub struct LocalTargetManager<'a> {
     pub base_path: &'a str,
 }
-
 impl<'a> LocalTargetManager<'a> {
     pub fn new(base_path: Option<&'a str>) -> Self {
         LocalTargetManager {
-            base_path: base_path.unwrap_or(""),
+            base_path: base_path.unwrap_or(""), // Modify default base path later.
         }
     }
 }
-
 impl<'a> TargetManager for LocalTargetManager<'a> {
     fn get_base_path(&self) -> &str {
         self.base_path
     }
 }
 
-pub trait RemoteAuthentication {
+pub trait SshRemoteAuthentication {
     fn authenticate(&self) -> Result<ssh2::Session, Box<dyn Error>>;
 }
 
@@ -72,7 +70,7 @@ pub struct SshPasswordAuthentication<'a> {
     pub username: &'a str,
     pub password: &'a str,
 }
-impl<'a> RemoteAuthentication for SshPasswordAuthentication<'a> {
+impl<'a> SshRemoteAuthentication for SshPasswordAuthentication<'a> {
     fn authenticate(&self) -> Result<ssh2::Session, Box<dyn Error>> {
         log::info!("Connecting to SSH server with password...");
         let tcp = std::net::TcpStream::connect(format!("{}:{}", self.ip, self.port))?;
@@ -90,7 +88,7 @@ pub struct SshKeyAuthentication<'a> {
     pub username: &'a str,
     pub pem_key: Option<&'a str>,
 }
-impl<'a> RemoteAuthentication for SshKeyAuthentication<'a> {
+impl<'a> SshRemoteAuthentication for SshKeyAuthentication<'a> {
     fn authenticate(&self) -> Result<ssh2::Session, Box<dyn Error>> {
         // "SSH Key authentication is not supported yet!"
         Err("SSH Key authentication is not supported yet!".into())
@@ -99,21 +97,22 @@ impl<'a> RemoteAuthentication for SshKeyAuthentication<'a> {
 
 pub struct SshTargetManager<'a, 'b> {
     pub base_path: &'a Path,
-    pub login_params: Box<dyn RemoteAuthentication + 'b>,
+    pub login_params: Box<dyn SshRemoteAuthentication + 'b>,
     pub connection: ssh2::Session,
 }
-
 impl<'a, 'b> SshTargetManager<'a, 'b> {
-    pub fn new<T: RemoteAuthentication + 'b>(base_path: Option<&'a str>, login_params: T) -> Self {
+    pub fn new<T: SshRemoteAuthentication + 'b>(
+        base_path: Option<&'a str>,
+        login_params: T,
+    ) -> Self {
         let connection = login_params.authenticate().unwrap();
         Self {
-            base_path: Path::new(base_path.unwrap_or("default")),
-            login_params: Box::new(login_params) as Box<dyn RemoteAuthentication + 'b>,
+            base_path: Path::new(base_path.unwrap_or("default")), // Modify default path here later.
+            login_params: Box::new(login_params) as Box<dyn SshRemoteAuthentication + 'b>,
             connection,
         }
     }
 }
-
 impl<'a, 'b> TargetManager for SshTargetManager<'a, 'b> {
     fn get_base_path(&self) -> &str {
         self.base_path.to_str().unwrap()

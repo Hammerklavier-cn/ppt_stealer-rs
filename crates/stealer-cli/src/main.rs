@@ -4,7 +4,7 @@ mod watch_dog;
 
 use cli::{Commands, DebugLevel, ScanParams, ServerParams, TargetParams, UploadTarget, get_args};
 use file_management::{
-    LocalTargetManager, RemoteAuthentication, SshKeyAuthentication, SshPasswordAuthentication,
+    LocalTargetManager, SshKeyAuthentication, SshPasswordAuthentication, SshRemoteAuthentication,
     SshTargetManager, TargetManager,
 };
 
@@ -69,21 +69,22 @@ pub fn headless(scan_params: ScanParams, server_params: ServerParams, target_par
     // connect to target file manager
     let mut target_managers: Vec<Box<dyn TargetManager>> = vec![];
     for upload_target in target_params.upload_targets {
-        let target_manager = match upload_target {
+        let target_manager: Box<dyn TargetManager> = match upload_target {
             UploadTarget::Local => Box::new(LocalTargetManager::new(
                 target_params.target_folder_name.as_deref(),
             )) as Box<dyn TargetManager>,
             UploadTarget::SshServer => {
-                let login_params = match &server_params.password {
+                let login_params = match server_params.password.as_deref() {
                     Some(passwd) => SshPasswordAuthentication {
                         ip: server_params.ip.as_deref().unwrap(),
                         port: server_params.port.unwrap(),
                         username: server_params.username.as_deref().unwrap(),
-                        password: &passwd,
+                        password: passwd,
                     },
                     None => panic!("KeyAuth is currently unsupported!"),
                 };
                 Box::new(SshTargetManager::new(Some("base_path"), login_params))
+                    as Box<dyn TargetManager>
             }
             UploadTarget::SmbServer | UploadTarget::FtpServer => panic!("Not supported yet!"),
         };
