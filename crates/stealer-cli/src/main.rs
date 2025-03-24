@@ -76,9 +76,9 @@ pub fn headless(scan_params: ScanParams, server_params: ServerParams, target_par
             UploadTarget::SshServer => {
                 let login_params = match &server_params.password {
                     Some(passwd) => SshPasswordAuthentication {
-                        ip: &server_params.ip.unwrap(),
+                        ip: server_params.ip.as_deref().unwrap(),
                         port: server_params.port.unwrap(),
-                        username: &server_params.username.unwrap(),
+                        username: server_params.username.as_deref().unwrap(),
                         password: &passwd,
                     },
                     None => panic!("KeyAuth is currently unsupported!"),
