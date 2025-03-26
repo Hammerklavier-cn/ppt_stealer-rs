@@ -7,6 +7,7 @@ use file_management::{
     LocalTargetManager, SshKeyAuthentication, SshPasswordAuthentication, SshRemoteAuthentication,
     SshTargetManager, TargetManager,
 };
+use walkdir::WalkDir;
 
 fn main() {
     let args = get_args();
@@ -86,7 +87,9 @@ pub fn headless(scan_params: ScanParams, server_params: ServerParams, target_par
                 Box::new(SshTargetManager::new(Some("base_path"), login_params))
                     as Box<dyn TargetManager>
             }
-            UploadTarget::SmbServer | UploadTarget::FtpServer => panic!("Not supported yet!"),
+            UploadTarget::SmbServer | UploadTarget::FtpServer => {
+                panic!("SMB and FTP are supported yet!")
+            }
         };
         target_managers.push(target_manager);
     }
