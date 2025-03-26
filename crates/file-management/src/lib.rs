@@ -1,5 +1,9 @@
+use chrono::Local;
 use log;
-use std::{error::Error, path::Path};
+use std::{
+    error::Error,
+    path::{Path, PathBuf},
+};
 
 pub fn add(left: u64, right: u64) -> u64 {
     left + right
@@ -14,6 +18,25 @@ mod tests {
         let result = add(2, 2);
         assert_eq!(result, 4);
     }
+}
+
+fn get_default_folder_name() -> PathBuf {
+    let formatted_date = Local::now().format("%Y-%m-%d").to_string();
+    let computer_identifier = match gethostname::gethostname().to_str() {
+        Some(name) => {
+            let home_dir = dirs::home_dir().unwrap();
+            format!(
+                "{} -- {}",
+                home_dir.file_name().unwrap().to_str().unwrap(),
+                name
+            )
+        }
+        None => {
+            let home_dir = dirs::home_dir().unwrap();
+            home_dir.file_name().unwrap().to_str().unwrap().to_string()
+        }
+    };
+    return Path::new(&formatted_date).join(Path::new(&computer_identifier));
 }
 
 pub trait TargetFile {
@@ -44,19 +67,22 @@ pub trait TargetManager {
     fn get_base_path(&self) -> &str;
 }
 
-pub struct LocalTargetManager<'a> {
-    pub base_path: &'a str,
+pub struct LocalTargetManager {
+    pub base_path: PathBuf,
 }
-impl<'a> LocalTargetManager<'a> {
-    pub fn new(base_path: Option<&'a str>) -> Self {
+impl LocalTargetManager {
+    pub fn new(base_path: Option<&str>) -> Self {
         LocalTargetManager {
-            base_path: base_path.unwrap_or(""), // Modify default base path later.
+            base_path: match base_path {
+                Some(path) => Path::new(path).to_path_buf(),
+                None => get_default_folder_name(),
+            },
         }
     }
 }
-impl<'a> TargetManager for LocalTargetManager<'a> {
+impl TargetManager for LocalTargetManager {
     fn get_base_path(&self) -> &str {
-        self.base_path
+        self.base_path.to_str().unwrap()
     }
 }
 
@@ -95,25 +121,28 @@ impl<'a> SshRemoteAuthentication for SshKeyAuthentication<'a> {
     }
 }
 
-pub struct SshTargetManager<'a, 'b> {
-    pub base_path: &'a Path,
-    pub login_params: Box<dyn SshRemoteAuthentication + 'b>,
+pub struct SshTargetManager<'a> {
+    pub base_path: PathBuf,
+    pub login_params: Box<dyn SshRemoteAuthentication + 'a>,
     pub connection: ssh2::Session,
 }
-impl<'a, 'b> SshTargetManager<'a, 'b> {
-    pub fn new<T: SshRemoteAuthentication + 'b>(
+impl<'a> SshTargetManager<'a> {
+    pub fn new<T: SshRemoteAuthentication + 'a>(
         base_path: Option<&'a str>,
         login_params: T,
     ) -> Self {
         let connection = login_params.authenticate().unwrap();
         Self {
-            base_path: Path::new(base_path.unwrap_or("default")), // Modify default path here later.
-            login_params: Box::new(login_params) as Box<dyn SshRemoteAuthentication + 'b>,
+            base_path: match base_path {
+                Some(path) => PathBuf::from(path),
+                None => get_default_folder_name(),
+            },
+            login_params: Box::new(login_params) as Box<dyn SshRemoteAuthentication + 'a>,
             connection,
         }
     }
 }
-impl<'a, 'b> TargetManager for SshTargetManager<'a, 'b> {
+impl TargetManager for SshTargetManager<'_> {
     fn get_base_path(&self) -> &str {
         self.base_path.to_str().unwrap()
     }
