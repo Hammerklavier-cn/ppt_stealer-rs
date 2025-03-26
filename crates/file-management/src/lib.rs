@@ -1,6 +1,8 @@
 use chrono::Local;
 use log;
+use sha2::{Digest, Sha256};
 use std::{
+    collections::BTreeSet,
     error::Error,
     path::{Path, PathBuf},
 };
@@ -42,24 +44,54 @@ fn get_default_folder_name() -> PathBuf {
 pub trait TargetFile {
     fn is_exists(&self) -> bool;
     fn get_sha256(&self) -> Result<Vec<u8>, Box<dyn Error>>;
-    fn upload(&self, source: &str) -> Result<(), Box<dyn Error>>;
 }
 
-pub struct LocalTargetFile<'a> {
-    pub path: &'a Path,
+pub struct LocalTargetFile {
+    pub path: PathBuf,
+    sha256: Option<String>,
 }
-
-impl TargetFile for LocalTargetFile<'_> {
+impl TargetFile for LocalTargetFile {
     fn is_exists(&self) -> bool {
         self.path.exists()
     }
 
     fn get_sha256(&self) -> Result<Vec<u8>, Box<dyn Error>> {
-        Ok(vec![])
+        match self.sha256.as_ref() {
+            Some(md5) => Ok(md5.clone().into_bytes()),
+            None => {
+                if self.is_exists() {
+                    let file = std::fs::File::open(&self.path)?;
+                    let mut reader = std::io::BufReader::new(file);
+                    let mut hasher = Sha256::new();
+                    std::io::copy(&mut reader, &mut hasher)?;
+
+                    let result = hasher.finalize();
+                    Ok(result.to_vec())
+                } else {
+                    return Err(format!("Local file not found at {}", self.path.display()).into());
+                }
+            }
+        }
+    }
+}
+impl<T: TargetFile> PartialEq<T> for LocalTargetFile {
+    fn eq(&self, other: &T) -> bool {
+        // 安全处理 Result，避免 unwrap() 导致 panic
+        self.get_sha256().ok().as_deref() == other.get_sha256().ok().as_deref()
+    }
+}
+
+struct SshTargetFile {
+    pub path: PathBuf,
+    sha256: Option<String>,
+}
+impl TargetFile for SshTargetFile {
+    fn is_exists(&self) -> bool {
+        false
     }
 
-    fn upload(&self, source: &str) -> Result<(), Box<dyn Error>> {
-        Ok(())
+    fn get_sha256(&self) -> Result<Vec<u8>, Box<dyn Error>> {
+        Err("Not supported yet".into())
     }
 }
 
@@ -78,6 +110,13 @@ impl LocalTargetManager {
                 None => get_default_folder_name(),
             },
         }
+    }
+    pub fn get_files(
+        &self,
+        exts: &str,
+        regex: &str,
+    ) -> Result<BTreeSet<LocalTargetFile>, Box<dyn Error>> {
+        Ok(BTreeSet::new())
     }
 }
 impl TargetManager for LocalTargetManager {
