@@ -2,8 +2,10 @@ use chrono::Local;
 use log;
 use sha2::{Digest, Sha256};
 use std::{
+    cell::RefCell,
     collections::BTreeSet,
     error::Error,
+    io::Read,
     path::{Path, PathBuf},
 };
 
@@ -38,60 +40,182 @@ fn get_default_folder_name() -> PathBuf {
             home_dir.file_name().unwrap().to_str().unwrap().to_string()
         }
     };
-    return Path::new(&formatted_date).join(Path::new(&computer_identifier));
+    let path = Path::new(&formatted_date).join(Path::new(&computer_identifier));
+    log::debug!("Default folder name identified as `{}`", path.display());
+    path
 }
 
 pub trait TargetFile {
-    fn is_exists(&self) -> bool;
-    fn get_sha256(&self) -> Result<Vec<u8>, Box<dyn Error>>;
+    /// Return error if connection failed to establish
+    fn is_exists(&self) -> Result<bool, Box<dyn Error>>;
+    fn get_sha256(&self) -> Result<String, Box<dyn Error>>;
+    fn get_new_sha256(&self) -> Result<String, Box<dyn Error>>;
 }
 
 pub struct LocalTargetFile {
     pub path: PathBuf,
-    sha256: Option<String>,
+    sha256: RefCell<Option<String>>,
 }
 impl TargetFile for LocalTargetFile {
-    fn is_exists(&self) -> bool {
-        self.path.exists()
+    fn is_exists(&self) -> Result<bool, Box<dyn Error>> {
+        Ok(self.path.exists())
     }
 
-    fn get_sha256(&self) -> Result<Vec<u8>, Box<dyn Error>> {
-        match self.sha256.as_ref() {
-            Some(md5) => Ok(md5.clone().into_bytes()),
-            None => {
-                if self.is_exists() {
-                    let file = std::fs::File::open(&self.path)?;
-                    let mut reader = std::io::BufReader::new(file);
-                    let mut hasher = Sha256::new();
-                    std::io::copy(&mut reader, &mut hasher)?;
+    fn get_new_sha256(&self) -> Result<String, Box<dyn Error>> {
+        let sha256_result = {
+            if let Ok(true) = self.is_exists() {
+                let file = std::fs::File::open(&self.path)?;
+                let mut reader = std::io::BufReader::new(file);
+                let mut hasher = Sha256::new();
+                std::io::copy(&mut reader, &mut hasher)?;
 
-                    let result = hasher.finalize();
-                    Ok(result.to_vec())
-                } else {
-                    return Err(format!("Local file not found at {}", self.path.display()).into());
-                }
+                let result = hasher.finalize();
+                Ok(format!("{:x}", result))
+            } else if let Ok(false) = self.is_exists() {
+                return Err(format!("Local file not found at {}", self.path.display()).into());
+            } else {
+                Err("Unexpected error".into())
             }
+        };
+
+        self.sha256
+            .replace(Some(sha256_result.as_deref().unwrap().to_string()));
+        sha256_result
+    }
+
+    fn get_sha256(&self) -> Result<String, Box<dyn Error>> {
+        let sha256_result = match self.sha256.borrow().as_ref() {
+            Some(sha256sum) => Ok(sha256sum.clone()),
+            None => self.get_new_sha256(),
+        };
+        if let Ok(sha256_value) = &sha256_result {
+            log::debug!(
+                "SHA256 sum of file `{}` is `{}`",
+                self.path.display(),
+                sha256_value
+            );
         }
+        sha256_result
     }
 }
 impl<T: TargetFile> PartialEq<T> for LocalTargetFile {
+    /// Compare the SHA256 sum of local and remote files
     fn eq(&self, other: &T) -> bool {
         // 安全处理 Result，避免 unwrap() 导致 panic
         self.get_sha256().ok().as_deref() == other.get_sha256().ok().as_deref()
     }
 }
 
-struct SshTargetFile {
+pub struct SshTargetFile<'a> {
     pub path: PathBuf,
-    sha256: Option<String>,
+    sha256_cell: RefCell<Option<String>>,
+    ssh_manager: RefCell<SshTargetManager<'a>>,
 }
-impl TargetFile for SshTargetFile {
-    fn is_exists(&self) -> bool {
-        false
+impl TargetFile for SshTargetFile<'_> {
+    fn is_exists(&self) -> Result<bool, Box<dyn Error>> {
+        let mut ssh_manager = self.ssh_manager.borrow_mut();
+
+        let sftp_conn = ssh_manager.get_sftp()?;
+        // let mut chan = match ssh_manager.get_channel() {
+        //     Ok(chan) => chan,
+        //     Err(err) => {
+        //         log::error!("Failed to get channel: {}", err);
+        //         return false;
+        //     }
+        // };
+        let sha256 = match sftp_conn.stat(&self.path) {
+            Ok(_) => true,
+            Err(_) => false,
+        };
+        Ok(sha256)
     }
 
-    fn get_sha256(&self) -> Result<Vec<u8>, Box<dyn Error>> {
-        Err("Not supported yet".into())
+    /// Get value from self.sha256_cell if exists, or get the value
+    /// by self.get_new_sha256()
+    fn get_sha256(&self) -> Result<String, Box<dyn Error>> {
+        if let Some(sha256) = self.sha256_cell.borrow().as_ref() {
+            Ok(sha256.clone())
+        } else {
+            let sha256 = self.get_new_sha256()?;
+            self.sha256_cell.borrow_mut().replace(sha256.clone());
+            Ok(sha256)
+        }
+    }
+
+    /// Refresh the sha256 value of the file and update the value to
+    /// self.sha256_cell
+    fn get_new_sha256(&self) -> Result<String, Box<dyn Error>> {
+        log::debug!("Refreshing sha256 value of {}", self.path.display());
+
+        let mut ssh_manager = self.ssh_manager.borrow_mut();
+
+        let sftp_conn = ssh_manager.get_sftp()?;
+        let mut chan = ssh_manager.get_channel()?;
+        let sha256 = match sftp_conn.stat(&self.path) {
+            Ok(_) => {
+                log::trace!("Found {} in remote ssh server", self.path.display());
+                let cmd = format!(
+                    "sha256sum '{}' | awk '{{print $1}}'",
+                    self.path.to_str().unwrap().replace("\\", "/")
+                );
+                log::trace!("Executing command: '{}'", cmd);
+                chan.exec(&cmd).unwrap(); // Work here!
+
+                let mut remote_hash = String::new();
+                chan.read_to_string(&mut remote_hash)
+                    .expect("Failed to read remote operation result.");
+                remote_hash = remote_hash.trim().to_string();
+
+                chan.wait_close().unwrap();
+
+                match chan.exit_status() {
+                    Ok(0) => {
+                        log::trace!(
+                            "Hash of remote file {} is {}",
+                            self.path.display(),
+                            remote_hash
+                        );
+                        Ok(remote_hash)
+                    }
+                    Ok(code) => {
+                        log::warn!(
+                            "Failed to get hash of remote file: Maybe false syntax? Error code: {}",
+                            code
+                        );
+                        Err(format!(
+                            "Executing remote sha256sum returned non-zero exit-code: {code}"
+                        )
+                        .into())
+                    }
+                    Err(err) => {
+                        log::warn!(
+                            "Failed to get hash of remote file: Maybe connection lost? Error info: {}",
+                            err
+                        );
+                        Err(err.into())
+                    }
+                }
+            }
+            Err(err) => {
+                log::warn!(
+                    "Failed to get hash of remote file {} because it does not exist: {}",
+                    self.path.display(),
+                    err
+                );
+                Err(err.into())
+            }
+        };
+
+        if let Ok(sha256sum) = sha256.as_deref() {
+            log::trace!(
+                "Update new sha256 value {} to SshTargetFile.sha256",
+                sha256sum
+            );
+            // Update sha256sum. Note that self.sha256 is type `RefCell<Option<String>>`
+            self.sha256_cell.borrow_mut().replace(sha256sum.to_string());
+        }
+
+        return sha256;
     }
 }
 
@@ -163,7 +287,7 @@ impl<'a> SshRemoteAuthentication for SshKeyAuthentication<'a> {
 pub struct SshTargetManager<'a> {
     pub base_path: PathBuf,
     pub login_params: Box<dyn SshRemoteAuthentication + 'a>,
-    pub connection: ssh2::Session,
+    pub session: ssh2::Session,
 }
 impl<'a> SshTargetManager<'a> {
     pub fn new<T: SshRemoteAuthentication + 'a>(
@@ -177,8 +301,50 @@ impl<'a> SshTargetManager<'a> {
                 None => get_default_folder_name(),
             },
             login_params: Box::new(login_params) as Box<dyn SshRemoteAuthentication + 'a>,
-            connection,
+            session: connection,
         }
+    }
+    pub fn reconnect(&mut self) -> Result<(), Box<dyn Error>> {
+        self.session = self.login_params.authenticate()?;
+        Ok(())
+        // Further complete the implementation
+    }
+
+    /// Get SFTP connection.
+    /// If you get an error, you needn't retry. The function automatically
+    /// reconnect and retry 10 times.
+    pub fn get_sftp(&mut self) -> Result<ssh2::Sftp, Box<dyn Error>> {
+        for i in 0..10 {
+            if let Ok(sftp) = self.session.sftp() {
+                return Ok(sftp);
+            } else {
+                log::warn!(
+                    "Failed to establish sftp connection. Retry after {}s {}/10",
+                    i + 1,
+                    10 - i
+                );
+                std::thread::sleep(std::time::Duration::from_millis(1000 * (i + 1)));
+                self.reconnect()?;
+            }
+        }
+        log::error!("Failed to establish sftp connection");
+        return Err("Failed to establish sftp connection".into());
+    }
+    pub fn get_channel(&mut self) -> Result<ssh2::Channel, Box<dyn Error>> {
+        for i in 0..10 {
+            if let Ok(channel) = self.session.channel_session() {
+                return Ok(channel);
+            } else {
+                log::warn!(
+                    "Failed to establish channel connection. Retry after 1s {}/10",
+                    10 - i
+                );
+                std::thread::sleep(std::time::Duration::from_millis(1000));
+                self.reconnect()?;
+            }
+        }
+        log::error!("Failed to establish channel connection");
+        return Err("Failed to establish channel connection".into());
     }
 }
 impl TargetManager for SshTargetManager<'_> {
