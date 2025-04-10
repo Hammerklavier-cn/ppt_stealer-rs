@@ -89,8 +89,8 @@ Options:
 
 ## 依赖
 
-rustc 1.83.0
-cargo 1.83.0
+Rustc edition 2021 should be able to compile the code, but you should modify the `Cargo.toml` file.  
+Default Rustc edition is 2024.
 
 ```toml
 [dependencies]
