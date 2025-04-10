@@ -104,7 +104,7 @@ pub struct LocalParams {
 pub struct TargetParams {
     #[arg(
         long,
-        help = "Upload files to a ssh server",
+        help = "Upload files to a ssh server. Note that you can only choose one kind of remote target! Only SshServer is implemented now.",
         default_value = "local",
         value_delimiter = ' '
     )]
