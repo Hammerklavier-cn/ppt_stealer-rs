@@ -8,6 +8,7 @@ use std::{
     io::Read,
     path::{Path, PathBuf},
 };
+use walkdir::WalkDir;
 
 fn get_default_folder_name() -> PathBuf {
     let formatted_date = Local::now().format("%Y-%m-%d").to_string();
@@ -222,9 +223,49 @@ impl LocalTargetManager {
             },
         }
     }
-    pub fn get_files(&self, exts: &str, regex: &str) -> Result<BTreeSet<LocalTargetFile>, Error> {
+    pub fn get_files(
+        &self,
+        exts: &[&str],
+        regex: Option<&str>,
+        min_depth: Option<usize>,
+        max_depth: Option<usize>,
+    ) -> Result<BTreeSet<LocalTargetFile>, Error> {
         // This function needs further implementation.
-        Ok(BTreeSet::new())
+        let mut files = BTreeSet::new();
+
+        let is_hidden = |entry: &walkdir::DirEntry| {
+            entry
+                .file_name()
+                .to_str()
+                .map(|s| s.starts_with(".") || s.starts_with("_") || s.starts_with("~$"))
+                .unwrap_or(false)
+        };
+
+        let walker = {
+            let mut temp_walkdir = WalkDir::new(&self.base_path);
+            if let Some(min_depth) = min_depth {
+                temp_walkdir = temp_walkdir.min_depth(min_depth);
+            };
+            if let Some(max_depth) = max_depth {
+                temp_walkdir = temp_walkdir.max_depth(max_depth);
+            };
+            temp_walkdir.into_iter()
+        };
+
+        for entry in walker
+            .filter_entry(|entry| !is_hidden(entry) || entry.file_type().is_file())
+            .filter_map(|entry| entry.ok())
+        {
+            let file_path_buf = entry.into_path();
+            log::trace!("Got file {}", file_path_buf.display())
+
+            // TODO: First check if the extension hits the target
+            //
+            // TODO: Then check if the file name meets the regex
+            //
+        }
+
+        Ok(files)
     }
 }
 impl TargetManager for LocalTargetManager {
