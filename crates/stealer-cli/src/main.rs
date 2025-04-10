@@ -1,4 +1,7 @@
-use std::process::exit;
+use std::{
+    collections::{BTreeSet, HashSet},
+    process::exit,
+};
 
 mod watch_dog;
 
@@ -7,7 +10,6 @@ use file_management::{
     LocalTargetManager, SshKeyAuthentication, SshPasswordAuthentication, SshRemoteAuthentication,
     SshTargetManager, TargetManager,
 };
-use walkdir::WalkDir;
 
 fn main() {
     let args = get_args();
@@ -113,6 +115,19 @@ pub fn headless(scan_params: ScanParams, server_params: ServerParams, target_par
     // continuously scan and upload
     loop {
         // get source directories
-        let source_pathbuf_set = watch_dog::get_source_directories(&scan_params);
+        // As source might include mutable divices (like usb), it must be refreshed periodically.
+        let source_pathbuf_set = match watch_dog::get_source_directories(&scan_params) {
+            Ok(directory_set) => directory_set,
+            Err(_) => continue,
+        };
+
+        let mut local_target_managers = BTreeSet::new();
+        for source_pathbuf in source_pathbuf_set {
+            local_target_managers.insert(LocalTargetManager {
+                base_path: source_pathbuf,
+            });
+        }
+        
+        
     }
 }
