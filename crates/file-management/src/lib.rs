@@ -5,7 +5,7 @@ use regex::Regex;
 use sha2::{Digest, Sha256};
 use std::{
     cell::RefCell,
-    collections::{BTreeSet, HashSet},
+    collections::HashSet,
     hash::Hash,
     io::Read,
     path::{Path, PathBuf},
@@ -217,17 +217,21 @@ impl TargetFile for SshTargetFile<'_> {
     }
 }
 
-pub trait TargetManager {
+pub trait FolderManager {
     fn get_base_path(&self) -> &str;
 }
 
+pub trait TargetManager: FolderManager {
+    fn upload_file(&self, local_file: LocalTargetFile) -> Result<()>;
+}
+
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
-pub struct LocalTargetManager {
+pub struct LocalSourceManager {
     pub base_path: PathBuf,
 }
-impl LocalTargetManager {
+impl LocalSourceManager {
     pub fn new(base_path: Option<&str>) -> Self {
-        LocalTargetManager {
+        LocalSourceManager {
             base_path: match base_path {
                 Some(path) => Path::new(path).to_path_buf(),
                 None => get_default_folder_name(),
@@ -329,9 +333,33 @@ impl LocalTargetManager {
         Ok(files)
     }
 }
-impl TargetManager for LocalTargetManager {
+impl FolderManager for LocalSourceManager {
     fn get_base_path(&self) -> &str {
         self.base_path.to_str().unwrap()
+    }
+}
+
+pub struct LocalTargetManager {
+    pub base_path: PathBuf,
+}
+impl LocalTargetManager {
+    pub fn new(base_path: Option<&str>) -> Self {
+        LocalTargetManager {
+            base_path: match base_path {
+                Some(path) => Path::new(path).to_path_buf(),
+                None => get_default_folder_name(),
+            },
+        }
+    }
+}
+impl FolderManager for LocalTargetManager {
+    fn get_base_path(&self) -> &str {
+        self.base_path.to_str().unwrap()
+    }
+}
+impl TargetManager for LocalTargetManager {
+    fn upload_file(&self, local_file: LocalTargetFile) -> Result<()> {
+        Ok(())
     }
 }
 
@@ -433,8 +461,13 @@ impl<'a> SshTargetManager<'a> {
         return Err(anyhow!("Failed to establish channel connection"));
     }
 }
-impl TargetManager for SshTargetManager<'_> {
+impl FolderManager for SshTargetManager<'_> {
     fn get_base_path(&self) -> &str {
         self.base_path.to_str().unwrap()
+    }
+}
+impl TargetManager for SshTargetManager<'_> {
+    fn upload_file(&self, local_file: LocalTargetFile) -> Result<()> {
+        Ok(())
     }
 }

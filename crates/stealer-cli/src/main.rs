@@ -7,8 +7,8 @@ mod watch_dog;
 
 use cli::{Commands, DebugLevel, ScanParams, ServerParams, TargetParams, UploadTarget, get_args};
 use file_management::{
-    LocalTargetManager, SshKeyAuthentication, SshPasswordAuthentication, SshRemoteAuthentication,
-    SshTargetManager, TargetManager,
+    LocalSourceManager, LocalTargetManager, SshKeyAuthentication, SshPasswordAuthentication,
+    SshRemoteAuthentication, SshTargetManager, TargetManager,
 };
 
 fn main() {
@@ -123,11 +123,9 @@ pub fn headless(scan_params: ScanParams, server_params: ServerParams, target_par
 
         let mut local_target_managers = BTreeSet::new();
         for source_pathbuf in source_pathbuf_set {
-            local_target_managers.insert(LocalTargetManager {
+            local_target_managers.insert(LocalSourceManager {
                 base_path: source_pathbuf,
             });
         }
-        
-        
     }
 }
