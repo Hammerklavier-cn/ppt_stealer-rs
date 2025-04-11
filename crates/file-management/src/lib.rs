@@ -1,10 +1,12 @@
 use anyhow::{Error, Result, anyhow};
 use chrono::Local;
 use log;
+use regex::Regex;
 use sha2::{Digest, Sha256};
 use std::{
     cell::RefCell,
-    collections::BTreeSet,
+    collections::{BTreeSet, HashSet},
+    hash::Hash,
     io::Read,
     path::{Path, PathBuf},
 };
@@ -38,6 +40,7 @@ pub trait TargetFile {
     fn get_new_sha256(&self) -> Result<String, Error>;
 }
 
+#[derive(Eq)]
 pub struct LocalTargetFile {
     pub path: PathBuf,
     sha256: RefCell<Option<String>>,
@@ -89,6 +92,14 @@ impl<T: TargetFile> PartialEq<T> for LocalTargetFile {
     fn eq(&self, other: &T) -> bool {
         // 安全处理 Result，避免 unwrap() 导致 panic
         self.get_sha256().ok().as_deref() == other.get_sha256().ok().as_deref()
+    }
+}
+impl Hash for LocalTargetFile {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.path.hash(state);
+        if let Some(sha256) = self.sha256.borrow().as_ref() {
+            sha256.hash(state);
+        }
     }
 }
 
@@ -229,9 +240,9 @@ impl LocalTargetManager {
         regex: Option<&str>,
         min_depth: Option<usize>,
         max_depth: Option<usize>,
-    ) -> Result<BTreeSet<LocalTargetFile>, Error> {
+    ) -> Result<HashSet<LocalTargetFile>, Error> {
         // This function needs further implementation.
-        let mut files = BTreeSet::new();
+        let mut files = HashSet::new();
 
         let is_hidden = |entry: &walkdir::DirEntry| {
             entry
@@ -253,16 +264,66 @@ impl LocalTargetManager {
         };
 
         for entry in walker
-            .filter_entry(|entry| !is_hidden(entry) || entry.file_type().is_file())
+            .filter_entry(|entry| {
+                if !is_hidden(entry) || entry.file_type().is_file() {
+                    log::trace!("{} is a hidden file", entry.clone().into_path().display());
+                    false
+                } else {
+                    true
+                }
+            })
             .filter_map(|entry| entry.ok())
         {
             let file_path_buf = entry.into_path();
-            log::trace!("Got file {}", file_path_buf.display())
+            log::trace!("Got file {}", file_path_buf.display());
 
             // TODO: First check if the extension hits the target
-            //
+            if let Some(ext) = file_path_buf.extension() {
+                let ext_string = ext.to_str().unwrap().to_lowercase();
+                if exts.contains(&ext_string.as_str()) {
+                    log::trace!(
+                        "Extension of {} is {}, which hits the target.",
+                        file_path_buf.display(),
+                        &ext_string
+                    );
+                    let local_file = LocalTargetFile {
+                        path: file_path_buf.clone(),
+                        sha256: RefCell::new(None),
+                    };
+                    files.insert(local_file);
+                    continue;
+                } else {
+                    log::trace!(
+                        "Extension of {} is {}, which fails to hit the target.",
+                        file_path_buf.display(),
+                        &ext_string
+                    );
+                }
+            }
             // TODO: Then check if the file name meets the regex
-            //
+            if let Some(pattern) = regex {
+                log::trace!("Checking {} against {}", file_path_buf.display(), pattern);
+                let re = match Regex::new(pattern) {
+                    Ok(re) => re,
+                    Err(_) => {
+                        log::error!("Invalid regex pattern: {}", pattern);
+                        continue;
+                    }
+                };
+                if re.is_match(file_path_buf.file_name().unwrap().to_str().unwrap()) {
+                    log::trace!("{} satisfies the regex pattern", file_path_buf.display());
+                    files.insert(LocalTargetFile {
+                        path: file_path_buf.clone(),
+                        sha256: RefCell::new(None),
+                    });
+                    continue;
+                } else {
+                    log::trace!(
+                        "{} failed to satisfy the regex pattern",
+                        file_path_buf.display()
+                    )
+                }
+            }
         }
 
         Ok(files)
