@@ -36,19 +36,32 @@ fn get_default_folder_name() -> PathBuf {
 pub trait TargetFile {
     /// Return error if connection failed to establish
     fn is_exists(&self) -> Result<bool, Error>;
+    fn get_relpath(&self) -> Result<PathBuf, Error>;
     fn get_sha256(&self) -> Result<String, Error>;
     fn get_new_sha256(&self) -> Result<String, Error>;
 }
 
+/// This struct depicts a local file.
+///
+/// Attributes:
+///
+/// - pub path (PathBuf): path to this local file
+/// - pub base_path (PathBuf): path to the foler
+///   from which the local file is scanned
+/// - sha256 (RefCell<Option<String>>): sha256sum of the local
+///   file whose value updates lazily
 #[derive(Eq)]
-pub struct LocalTargetFile {
+pub struct LocalFile {
     pub path: PathBuf,
+    pub base_path: PathBuf,
     sha256: RefCell<Option<String>>,
 }
-impl TargetFile for LocalTargetFile {
+impl TargetFile for LocalFile {
     fn is_exists(&self) -> Result<bool, Error> {
         Ok(self.path.exists())
     }
+
+    fn get_relpath(&self) -> Result<PathBuf, Error> {}
 
     fn get_new_sha256(&self) -> Result<String, anyhow::Error> {
         let sha256_result = {
@@ -87,14 +100,14 @@ impl TargetFile for LocalTargetFile {
         sha256_result
     }
 }
-impl<T: TargetFile> PartialEq<T> for LocalTargetFile {
+impl<T: TargetFile> PartialEq<T> for LocalFile {
     /// Compare the SHA256 sum of local and remote files
     fn eq(&self, other: &T) -> bool {
         // 安全处理 Result，避免 unwrap() 导致 panic
         self.get_sha256().ok().as_deref() == other.get_sha256().ok().as_deref()
     }
 }
-impl Hash for LocalTargetFile {
+impl Hash for LocalFile {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.path.hash(state);
         if let Some(sha256) = self.sha256.borrow().as_ref() {
@@ -103,6 +116,14 @@ impl Hash for LocalTargetFile {
     }
 }
 
+/// The _location_ of a file to which it will be uploaded.
+///
+/// It is binded to a `SshTargetManager`, which is responsible
+/// for ssh/sftp connection establishment.
+///
+/// There can be no file at `SshTargetFile.path`, in which case
+/// `SshTargetFile.sha256_cell` is RefCell<None> and
+/// `SshTargetFile.is_exists()` returns Ok(false).
 pub struct SshTargetFile<'a> {
     pub path: PathBuf,
     sha256_cell: RefCell<Option<String>>,
@@ -217,14 +238,19 @@ impl TargetFile for SshTargetFile<'_> {
     }
 }
 
+/// trait of `LocalSourceManager` and all `TargetManager`
 pub trait FolderManager {
     fn get_base_path(&self) -> &str;
 }
 
 pub trait TargetManager: FolderManager {
-    fn upload_file(&self, local_file: LocalTargetFile) -> Result<()>;
+    fn upload_file(&self, local_file: LocalFile) -> Result<(), anyhow::Error>;
 }
 
+/// manager for a local folder from which files are scanned and selected
+///
+/// self.base_path is the root folder from which local files are scanned and
+/// uploaded.
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
 pub struct LocalSourceManager {
     pub base_path: PathBuf,
@@ -244,7 +270,7 @@ impl LocalSourceManager {
         regex: Option<&str>,
         min_depth: Option<usize>,
         max_depth: Option<usize>,
-    ) -> Result<HashSet<LocalTargetFile>, Error> {
+    ) -> Result<HashSet<LocalFile>, Error> {
         // This function needs further implementation.
         let mut files = HashSet::new();
 
@@ -290,8 +316,9 @@ impl LocalSourceManager {
                         file_path_buf.display(),
                         &ext_string
                     );
-                    let local_file = LocalTargetFile {
+                    let local_file = LocalFile {
                         path: file_path_buf.clone(),
+                        base_path: self.base_path.clone(),
                         sha256: RefCell::new(None),
                     };
                     files.insert(local_file);
@@ -316,8 +343,9 @@ impl LocalSourceManager {
                 };
                 if re.is_match(file_path_buf.file_name().unwrap().to_str().unwrap()) {
                     log::trace!("{} satisfies the regex pattern", file_path_buf.display());
-                    files.insert(LocalTargetFile {
+                    files.insert(LocalFile {
                         path: file_path_buf.clone(),
+                        base_path: self.base_path.clone(),
                         sha256: RefCell::new(None),
                     });
                     continue;
@@ -339,6 +367,10 @@ impl FolderManager for LocalSourceManager {
     }
 }
 
+/// manager for target folder which exists locally
+///
+/// `self.base_path` is the root folder based on which files will
+/// be uploaded according to the relative path.
 pub struct LocalTargetManager {
     pub base_path: PathBuf,
 }
@@ -358,7 +390,9 @@ impl FolderManager for LocalTargetManager {
     }
 }
 impl TargetManager for LocalTargetManager {
-    fn upload_file(&self, local_file: LocalTargetFile) -> Result<()> {
+    fn upload_file(&self, local_file: LocalFile) -> Result<(), anyhow::Error> {
+        let source_path = local_file.path;
+        // get relavent path
         Ok(())
     }
 }
@@ -398,6 +432,8 @@ impl<'a> SshRemoteAuthentication for SshKeyAuthentication<'a> {
     }
 }
 
+/// manager for a folder which is accessible via SSH and to which
+/// local files will be uploaded to
 pub struct SshTargetManager<'a> {
     pub base_path: PathBuf,
     pub login_params: Box<dyn SshRemoteAuthentication + 'a>,
@@ -467,7 +503,7 @@ impl FolderManager for SshTargetManager<'_> {
     }
 }
 impl TargetManager for SshTargetManager<'_> {
-    fn upload_file(&self, local_file: LocalTargetFile) -> Result<()> {
+    fn upload_file(&self, local_file: LocalFile) -> Result<(), anyhow::Error> {
         Ok(())
     }
 }
