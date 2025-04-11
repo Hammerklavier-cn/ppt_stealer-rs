@@ -1,7 +1,8 @@
 use log;
 use std::process::exit;
 
-use cli::{get_args, shared_function, DebugLevel};
+use cli::{DebugLevel, get_args, shared_function};
+use stealer_cli::headless;
 
 fn main() {
     println!("Hello, world!");
@@ -11,16 +12,18 @@ fn main() {
     let args = get_args();
 
     // set up logging level
-    std::env::set_var(
-        "RUST_LOG",
-        match args.debug_level {
-            DebugLevel::Trace => "trace",
-            DebugLevel::Debug => "debug",
-            DebugLevel::Info => "info",
-            DebugLevel::Warn => "warn",
-            DebugLevel::Error => "error",
-        },
-    );
+    unsafe {
+        std::env::set_var(
+            "RUST_LOG",
+            match args.debug_level {
+                DebugLevel::Trace => "trace",
+                DebugLevel::Debug => "debug",
+                DebugLevel::Info => "info",
+                DebugLevel::Warn => "warn",
+                DebugLevel::Error => "error",
+            },
+        );
+    }
     env_logger::init();
 
     // determine running mode
@@ -38,6 +41,7 @@ fn main() {
                 scan_params,
             } => {
                 log::info!("No GUI mode selected.");
+                headless(scan_params, server_params, target_params);
             }
         },
         None => {

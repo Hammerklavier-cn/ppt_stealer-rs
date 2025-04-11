@@ -61,7 +61,23 @@ impl TargetFile for LocalFile {
         Ok(self.path.exists())
     }
 
-    fn get_relpath(&self) -> Result<PathBuf, Error> {}
+    fn get_relpath(&self) -> Result<PathBuf, Error> {
+        self.path
+            .canonicalize()
+            .map_err(|e| {
+                anyhow!(
+                    "Failed to get canonicalized path of {}: {}",
+                    self.path.display(),
+                    e
+                )
+            })
+            .and_then(|canonical_path| {
+                canonical_path
+                    .strip_prefix(&self.base_path)
+                    .map(|p| p.to_path_buf())
+                    .map_err(|e| anyhow!("Failed to get relative path: {}", e))
+            })
+    }
 
     fn get_new_sha256(&self) -> Result<String, anyhow::Error> {
         let sha256_result = {
@@ -126,6 +142,7 @@ impl Hash for LocalFile {
 /// `SshTargetFile.is_exists()` returns Ok(false).
 pub struct SshTargetFile<'a> {
     pub path: PathBuf,
+    base_path: PathBuf,
     sha256_cell: RefCell<Option<String>>,
     ssh_manager: RefCell<SshTargetManager<'a>>,
 }
@@ -146,6 +163,24 @@ impl TargetFile for SshTargetFile<'_> {
             Err(_) => false,
         };
         Ok(sha256)
+    }
+
+    fn get_relpath(&self) -> Result<PathBuf, Error> {
+        self.path
+            .canonicalize()
+            .map_err(|e| {
+                anyhow!(
+                    "Failed to get canonicalized path of {}: {}",
+                    self.path.display(),
+                    e
+                )
+            })
+            .and_then(|canonical_path| {
+                canonical_path
+                    .strip_prefix(&self.base_path)
+                    .map(|p| p.to_path_buf())
+                    .map_err(|e| anyhow!("Failed to get relative path: {}", e))
+            })
     }
 
     /// Get value from self.sha256_cell if exists, or get the value
