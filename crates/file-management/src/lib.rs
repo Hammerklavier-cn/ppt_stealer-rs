@@ -33,12 +33,33 @@ fn get_default_folder_name() -> PathBuf {
     path
 }
 
-pub trait TargetFile {
+/// Generate a `TargetFile` from a `LocalFile`.
+pub fn convert_local_file_to_target<T, U>(source: LocalFile, tm: T) -> U
+where
+    // F: FolderManager,
+    T: TargetManager,
+    U: TargetFile<T = T>,
+{
+    // TODO: the `root_path` is problematic!
+    let root_path = PathBuf::from(&source.ltm.get_base_path())
+        .canonicalize()
+        .unwrap();
+    let abspath = &source.path.canonicalize().unwrap();
+    let relpath = abspath.strip_prefix(&root_path).unwrap();
+    TargetFile::from_relpath(&root_path, relpath, tm)
+}
+
+pub trait SingleFile {
     /// Return error if connection failed to establish
     fn is_exists(&self) -> Result<bool, Error>;
     fn get_relpath(&self) -> Result<PathBuf, Error>;
     fn get_sha256(&self) -> Result<String, Error>;
     fn get_new_sha256(&self) -> Result<String, Error>;
+}
+
+pub trait TargetFile: SingleFile {
+    type T: TargetManager;
+    fn from_relpath(root_path: &Path, relpath: &Path, fm: Self::T) -> Self;
 }
 
 /// This struct depicts a local file.
@@ -50,13 +71,13 @@ pub trait TargetFile {
 ///   from which the local file is scanned
 /// - sha256 (RefCell<Option<String>>): sha256sum of the local
 ///   file whose value updates lazily
-#[derive(Eq)]
+// #[derive(Eq)]
 pub struct LocalFile {
     pub path: PathBuf,
-    pub base_path: PathBuf,
     sha256: RefCell<Option<String>>,
+    ltm: Box<dyn LocalFolderManager>,
 }
-impl TargetFile for LocalFile {
+impl SingleFile for LocalFile {
     fn is_exists(&self) -> Result<bool, Error> {
         Ok(self.path.exists())
     }
@@ -73,7 +94,7 @@ impl TargetFile for LocalFile {
             })
             .and_then(|canonical_path| {
                 canonical_path
-                    .strip_prefix(&self.base_path)
+                    .strip_prefix(&self.ltm.get_base_path())
                     .map(|p| p.to_path_buf())
                     .map_err(|e| anyhow!("Failed to get relative path: {}", e))
             })
@@ -116,13 +137,34 @@ impl TargetFile for LocalFile {
         sha256_result
     }
 }
-impl<T: TargetFile> PartialEq<T> for LocalFile {
-    /// Compare the SHA256 sum of local and remote files
-    fn eq(&self, other: &T) -> bool {
-        // 安全处理 Result，避免 unwrap() 导致 panic
+impl TargetFile for LocalFile {
+    type T = LocalTargetManager;
+    fn from_relpath(root_path: &Path, relpath: &Path, fm: Self::T) -> Self {
+        Self {
+            path: root_path.join(relpath),
+            sha256: RefCell::new(None),
+            ltm: Box::new(fm),
+        }
+    }
+}
+impl PartialEq for LocalFile {
+    fn eq(&self, other: &Self) -> bool {
         self.get_sha256().ok().as_deref() == other.get_sha256().ok().as_deref()
     }
 }
+impl Eq for LocalFile {}
+impl PartialEq for Box<dyn SingleFile> {
+    fn eq(&self, other: &Self) -> bool {
+        self.get_sha256().ok().as_deref() == other.get_sha256().ok().as_deref()
+    }
+}
+impl Eq for Box<dyn SingleFile> {}
+impl Hash for Box<dyn SingleFile> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.get_new_sha256().ok().as_deref().hash(state);
+    }
+}
+// impl Eq for LocalFile {}
 impl Hash for LocalFile {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.path.hash(state);
@@ -142,11 +184,10 @@ impl Hash for LocalFile {
 /// `SshTargetFile.is_exists()` returns Ok(false).
 pub struct SshTargetFile<'a> {
     pub path: PathBuf,
-    base_path: PathBuf,
     sha256_cell: RefCell<Option<String>>,
     ssh_manager: RefCell<SshTargetManager<'a>>,
 }
-impl TargetFile for SshTargetFile<'_> {
+impl SingleFile for SshTargetFile<'_> {
     fn is_exists(&self) -> Result<bool, Error> {
         let mut ssh_manager = self.ssh_manager.borrow_mut();
 
@@ -177,7 +218,7 @@ impl TargetFile for SshTargetFile<'_> {
             })
             .and_then(|canonical_path| {
                 canonical_path
-                    .strip_prefix(&self.base_path)
+                    .strip_prefix(&self.ssh_manager.borrow().base_path)
                     .map(|p| p.to_path_buf())
                     .map_err(|e| anyhow!("Failed to get relative path: {}", e))
             })
@@ -272,33 +313,55 @@ impl TargetFile for SshTargetFile<'_> {
         return sha256;
     }
 }
+impl<'a> TargetFile for SshTargetFile<'a> {
+    type T = SshTargetManager<'a>;
+    fn from_relpath(root_path: &Path, relpath: &Path, fm: SshTargetManager<'a>) -> Self {
+        Self {
+            path: root_path.join(relpath),
+            sha256_cell: RefCell::new(None),
+            ssh_manager: RefCell::new(fm),
+        }
+    }
+}
 
 /// trait of `LocalSourceManager` and all `TargetManager`
 pub trait FolderManager {
     fn get_base_path(&self) -> &str;
 }
 
+pub trait LocalFolderManager: FolderManager {
+    fn is_local(&self) -> bool {
+        return true;
+    }
+}
+
 pub trait TargetManager: FolderManager {
     fn upload_file(&self, local_file: LocalFile) -> Result<(), anyhow::Error>;
 }
+
+// pub enum AnyTargetManager<'a> {
+//     Local(LocalTargetManager),
+//     Ssh(SshTargetManager<'a>),
+// }
+
+// impl<'a> TargetManager for AnyTargetManager<'a> {
+//     fn upload_file<T: FolderManager>(&self, local_file: LocalFile<T>) -> Result<(), anyhow::Error> {
+//         match self {
+//             AnyTargetManager::Local(m) => m.upload_file(local_file),
+//             AnyTargetManager::Ssh(m) => m.upload_file(local_file),
+//         }
+//     }
+// }
 
 /// manager for a local folder from which files are scanned and selected
 ///
 /// self.base_path is the root folder from which local files are scanned and
 /// uploaded.
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
 pub struct LocalSourceManager {
     pub base_path: PathBuf,
 }
 impl LocalSourceManager {
-    pub fn new(base_path: Option<&str>) -> Self {
-        LocalSourceManager {
-            base_path: match base_path {
-                Some(path) => Path::new(path).to_path_buf(),
-                None => get_default_folder_name(),
-            },
-        }
-    }
     pub fn get_files(
         &self,
         exts: &[&str],
@@ -342,7 +405,7 @@ impl LocalSourceManager {
             let file_path_buf = entry.into_path();
             log::trace!("Got file {}", file_path_buf.display());
 
-            // TODO: First check if the extension hits the target
+            //  First check if the extension hits the target
             if let Some(ext) = file_path_buf.extension() {
                 let ext_string = ext.to_str().unwrap().to_lowercase();
                 if exts.contains(&ext_string.as_str()) {
@@ -353,8 +416,8 @@ impl LocalSourceManager {
                     );
                     let local_file = LocalFile {
                         path: file_path_buf.clone(),
-                        base_path: self.base_path.clone(),
                         sha256: RefCell::new(None),
+                        ltm: Box::new(self.clone()),
                     };
                     files.insert(local_file);
                     continue;
@@ -366,7 +429,7 @@ impl LocalSourceManager {
                     );
                 }
             }
-            // TODO: Then check if the file name meets the regex
+            // Then check if the file name meets the regex
             if let Some(pattern) = regex {
                 log::trace!("Checking {} against {}", file_path_buf.display(), pattern);
                 let re = match Regex::new(pattern) {
@@ -380,8 +443,8 @@ impl LocalSourceManager {
                     log::trace!("{} satisfies the regex pattern", file_path_buf.display());
                     files.insert(LocalFile {
                         path: file_path_buf.clone(),
-                        base_path: self.base_path.clone(),
                         sha256: RefCell::new(None),
+                        ltm: Box::new(self.clone()),
                     });
                     continue;
                 } else {
@@ -401,11 +464,13 @@ impl FolderManager for LocalSourceManager {
         self.base_path.to_str().unwrap()
     }
 }
+impl LocalFolderManager for LocalSourceManager {}
 
 /// manager for target folder which exists locally
 ///
 /// `self.base_path` is the root folder based on which files will
 /// be uploaded according to the relative path.
+#[derive(PartialEq, Eq)]
 pub struct LocalTargetManager {
     pub base_path: PathBuf,
 }
@@ -424,9 +489,10 @@ impl FolderManager for LocalTargetManager {
         self.base_path.to_str().unwrap()
     }
 }
+impl LocalFolderManager for LocalTargetManager {}
 impl TargetManager for LocalTargetManager {
     fn upload_file(&self, local_file: LocalFile) -> Result<(), anyhow::Error> {
-        let source_path = local_file.path;
+        let _source_path = local_file.path;
         // get relavent path
         Ok(())
     }
@@ -539,6 +605,7 @@ impl FolderManager for SshTargetManager<'_> {
 }
 impl TargetManager for SshTargetManager<'_> {
     fn upload_file(&self, local_file: LocalFile) -> Result<(), anyhow::Error> {
+        // TODO
         Ok(())
     }
 }

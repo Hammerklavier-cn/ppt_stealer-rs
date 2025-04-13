@@ -15,6 +15,7 @@ pub fn headless(scan_params: ScanParams, server_params: ServerParams, target_par
     // determine base directory
 
     // connect to target file manager
+    log::info!("Targets: {:?}", target_params.upload_targets);
     let mut target_managers: Vec<Box<dyn TargetManager>> = vec![];
     {
         let mut remote_server_selected = false;
@@ -59,6 +60,7 @@ pub fn headless(scan_params: ScanParams, server_params: ServerParams, target_par
 
     // continuously scan and upload
     loop {
+        log::debug!("Loop.");
         // get source directories
         // As source might include mutable divices (like usb), it must be refreshed periodically.
         let source_pathbuf_set = match watch_dog::get_source_directories(&scan_params) {
@@ -71,6 +73,7 @@ pub fn headless(scan_params: ScanParams, server_params: ServerParams, target_par
             local_target_managers.insert(LocalSourceManager {
                 base_path: source_pathbuf,
             });
+            println!("{:?}", &local_target_managers)
         }
     }
 }
