@@ -9,6 +9,7 @@ use std::{
     hash::Hash,
     io::Read,
     path::{Path, PathBuf},
+    rc::Rc,
 };
 use walkdir::WalkDir;
 
@@ -18,7 +19,7 @@ fn get_default_folder_name() -> PathBuf {
         Some(name) => {
             let home_dir = dirs::home_dir().unwrap();
             format!(
-                "{} -- {}",
+                "{}--{}",
                 home_dir.file_name().unwrap().to_str().unwrap(),
                 name
             )
@@ -34,19 +35,18 @@ fn get_default_folder_name() -> PathBuf {
 }
 
 /// Generate a `TargetFile` from a `LocalFile`.
-pub fn convert_local_file_to_target<T, U>(source: LocalFile, tm: T) -> U
+pub fn convert_local_file_to_target<T, U>(source: LocalFile, tm: Rc<RefCell<T>>) -> U
 where
     // F: FolderManager,
     T: TargetManager,
     U: TargetFile<T = T>,
 {
-    // TODO: the `root_path` is problematic!
-    let root_path = PathBuf::from(&source.ltm.get_base_path())
+    let root_path = PathBuf::from(&source.ltm.borrow().get_base_path())
         .canonicalize()
         .unwrap();
     let abspath = &source.path.canonicalize().unwrap();
     let relpath = abspath.strip_prefix(&root_path).unwrap();
-    TargetFile::from_relpath(&root_path, relpath, tm)
+    TargetFile::from_relpath(relpath, tm)
 }
 
 pub trait SingleFile {
@@ -57,9 +57,17 @@ pub trait SingleFile {
     fn get_new_sha256(&self) -> Result<String, Error>;
 }
 
+pub trait SourceFile: SingleFile {
+    fn upload_to_folder<T: TargetManager>(&self, target_manager: Rc<RefCell<T>>);
+}
+
 pub trait TargetFile: SingleFile {
     type T: TargetManager;
-    fn from_relpath(root_path: &Path, relpath: &Path, fm: Self::T) -> Self;
+    fn from_relpath(relpath: &Path, fm: Rc<RefCell<Self::T>>) -> Self;
+    /// Make sure that self.path is a valid remote path. If it is not, create
+    /// the folders.
+    fn initialise_path(&self) -> Result<(), Error>;
+    fn receive_from_file(&self) -> Result<(), Error>;
 }
 
 /// This struct depicts a local file.
@@ -75,7 +83,7 @@ pub trait TargetFile: SingleFile {
 pub struct LocalFile {
     pub path: PathBuf,
     sha256: RefCell<Option<String>>,
-    ltm: Box<dyn LocalFolderManager>,
+    ltm: Rc<RefCell<dyn LocalFolderManager>>,
 }
 impl SingleFile for LocalFile {
     fn is_exists(&self) -> Result<bool, Error> {
@@ -94,7 +102,7 @@ impl SingleFile for LocalFile {
             })
             .and_then(|canonical_path| {
                 canonical_path
-                    .strip_prefix(&self.ltm.get_base_path())
+                    .strip_prefix(&self.ltm.borrow().get_base_path())
                     .map(|p| p.to_path_buf())
                     .map_err(|e| anyhow!("Failed to get relative path: {}", e))
             })
@@ -139,11 +147,11 @@ impl SingleFile for LocalFile {
 }
 impl TargetFile for LocalFile {
     type T = LocalTargetManager;
-    fn from_relpath(root_path: &Path, relpath: &Path, fm: Self::T) -> Self {
+    fn from_relpath(relpath: &Path, fm: Rc<RefCell<Self::T>>) -> Self {
         Self {
-            path: root_path.join(relpath),
+            path: fm.borrow().base_path.join(relpath).canonicalize().unwrap(),
             sha256: RefCell::new(None),
-            ltm: Box::new(fm),
+            ltm: fm.clone(),
         }
     }
 }
@@ -185,25 +193,19 @@ impl Hash for LocalFile {
 pub struct SshTargetFile<'a> {
     pub path: PathBuf,
     sha256_cell: RefCell<Option<String>>,
-    ssh_manager: RefCell<SshTargetManager<'a>>,
+    ssh_manager: Rc<RefCell<SshTargetManager<'a>>>,
 }
 impl SingleFile for SshTargetFile<'_> {
     fn is_exists(&self) -> Result<bool, Error> {
         let mut ssh_manager = self.ssh_manager.borrow_mut();
 
         let sftp_conn = ssh_manager.get_sftp()?;
-        // let mut chan = match ssh_manager.get_channel() {
-        //     Ok(chan) => chan,
-        //     Err(err) => {
-        //         log::error!("Failed to get channel: {}", err);
-        //         return false;
-        //     }
-        // };
-        let sha256 = match sftp_conn.stat(&self.path) {
+
+        let exist_or_not = match sftp_conn.stat(&self.path) {
             Ok(_) => true,
             Err(_) => false,
         };
-        Ok(sha256)
+        Ok(exist_or_not)
     }
 
     fn get_relpath(&self) -> Result<PathBuf, Error> {
@@ -315,18 +317,18 @@ impl SingleFile for SshTargetFile<'_> {
 }
 impl<'a> TargetFile for SshTargetFile<'a> {
     type T = SshTargetManager<'a>;
-    fn from_relpath(root_path: &Path, relpath: &Path, fm: SshTargetManager<'a>) -> Self {
+    fn from_relpath(relpath: &Path, fm: Rc<RefCell<SshTargetManager<'a>>>) -> Self {
         Self {
-            path: root_path.join(relpath),
+            path: fm.borrow().base_path.join(relpath).canonicalize().unwrap(),
             sha256_cell: RefCell::new(None),
-            ssh_manager: RefCell::new(fm),
+            ssh_manager: fm.clone(),
         }
     }
 }
 
 /// trait of `LocalSourceManager` and all `TargetManager`
 pub trait FolderManager {
-    fn get_base_path(&self) -> &str;
+    fn get_base_path(&self) -> PathBuf;
 }
 
 pub trait LocalFolderManager: FolderManager {
@@ -335,8 +337,17 @@ pub trait LocalFolderManager: FolderManager {
     }
 }
 
+/// There is no method called `receive_from_file` as it will be a (relatively)
+/// very inefficient process. Use `upload_from_folder`, or `SourceManager::upload_to_folder`
+/// instead.
 pub trait TargetManager: FolderManager {
-    fn upload_file(&self, local_file: LocalFile) -> Result<(), anyhow::Error>;
+    /// Note that another `target_file` parameter should be added to this trait method!
+    /// Maybe this method can be remove, and converted to a function.
+    fn receive_from_folder(
+        &self,
+        local_source_folder: LocalSourceManager,
+    ) -> Result<(), anyhow::Error>;
+    // fn base_path_initialise(&self) -> Result<(), anyhow::Error>;
 }
 
 // pub enum AnyTargetManager<'a> {
@@ -353,7 +364,7 @@ pub trait TargetManager: FolderManager {
 //     }
 // }
 
-/// manager for a local folder from which files are scanned and selected
+/// Manager for a local folder from which files are scanned and selected.
 ///
 /// self.base_path is the root folder from which local files are scanned and
 /// uploaded.
@@ -369,7 +380,9 @@ impl LocalSourceManager {
         min_depth: Option<usize>,
         max_depth: Option<usize>,
     ) -> Result<HashSet<LocalFile>, Error> {
-        // This function needs further implementation.
+        // 创建一个共享的 Rc<RefCell<LocalSourceManager>> 实例
+        let shared_ltm = Rc::new(RefCell::new(self.clone()));
+
         let mut files = HashSet::new();
 
         let is_hidden = |entry: &walkdir::DirEntry| {
@@ -384,28 +397,21 @@ impl LocalSourceManager {
             let mut temp_walkdir = WalkDir::new(&self.base_path);
             if let Some(min_depth) = min_depth {
                 temp_walkdir = temp_walkdir.min_depth(min_depth);
-            };
+            }
             if let Some(max_depth) = max_depth {
                 temp_walkdir = temp_walkdir.max_depth(max_depth);
-            };
+            }
             temp_walkdir.into_iter()
         };
 
         for entry in walker
-            .filter_entry(|entry| {
-                if !is_hidden(entry) || entry.file_type().is_file() {
-                    log::trace!("{} is a hidden file", entry.clone().into_path().display());
-                    false
-                } else {
-                    true
-                }
-            })
+            .filter_entry(|entry| !is_hidden(entry))
             .filter_map(|entry| entry.ok())
         {
             let file_path_buf = entry.into_path();
             log::trace!("Got file {}", file_path_buf.display());
 
-            //  First check if the extension hits the target
+            // 检查文件扩展名是否匹配
             if let Some(ext) = file_path_buf.extension() {
                 let ext_string = ext.to_str().unwrap().to_lowercase();
                 if exts.contains(&ext_string.as_str()) {
@@ -417,7 +423,7 @@ impl LocalSourceManager {
                     let local_file = LocalFile {
                         path: file_path_buf.clone(),
                         sha256: RefCell::new(None),
-                        ltm: Box::new(self.clone()),
+                        ltm: shared_ltm.clone(), // 使用共享的实例
                     };
                     files.insert(local_file);
                     continue;
@@ -429,7 +435,8 @@ impl LocalSourceManager {
                     );
                 }
             }
-            // Then check if the file name meets the regex
+
+            // 检查文件名是否匹配正则表达式
             if let Some(pattern) = regex {
                 log::trace!("Checking {} against {}", file_path_buf.display(), pattern);
                 let re = match Regex::new(pattern) {
@@ -441,27 +448,31 @@ impl LocalSourceManager {
                 };
                 if re.is_match(file_path_buf.file_name().unwrap().to_str().unwrap()) {
                     log::trace!("{} satisfies the regex pattern", file_path_buf.display());
-                    files.insert(LocalFile {
+                    let local_file = LocalFile {
                         path: file_path_buf.clone(),
                         sha256: RefCell::new(None),
-                        ltm: Box::new(self.clone()),
-                    });
+                        ltm: shared_ltm.clone(), // 使用共享的实例
+                    };
+                    files.insert(local_file);
                     continue;
                 } else {
                     log::trace!(
                         "{} failed to satisfy the regex pattern",
                         file_path_buf.display()
-                    )
+                    );
                 }
             }
         }
-
         Ok(files)
+    }
+    fn upload_to_folder(&self, target_manager: Rc<RefCell<dyn TargetManager>>) -> Result<()> {
+        // TODO: implementation
+        Ok(())
     }
 }
 impl FolderManager for LocalSourceManager {
-    fn get_base_path(&self) -> &str {
-        self.base_path.to_str().unwrap()
+    fn get_base_path(&self) -> PathBuf {
+        self.base_path.canonicalize().unwrap()
     }
 }
 impl LocalFolderManager for LocalSourceManager {}
@@ -485,15 +496,42 @@ impl LocalTargetManager {
     }
 }
 impl FolderManager for LocalTargetManager {
-    fn get_base_path(&self) -> &str {
-        self.base_path.to_str().unwrap()
+    fn get_base_path(&self) -> PathBuf {
+        self.base_path.canonicalize().unwrap()
     }
 }
 impl LocalFolderManager for LocalTargetManager {}
 impl TargetManager for LocalTargetManager {
-    fn upload_file(&self, local_file: LocalFile) -> Result<(), anyhow::Error> {
-        let _source_path = local_file.path;
-        // get relavent path
+    fn receive_from_folder(
+        &self,
+        local_source_file: LocalSourceManager,
+    ) -> Result<(), anyhow::Error> {
+        // let remote_path = {
+        //     let source_path = local_source_file.base_path.clone();
+        //     let source_root_path = local_source_file.ltm.deref().borrow().get_base_path();
+        //     let relpath = source_path.strip_prefix(source_root_path)?;
+        //     let remote_path = self.get_base_path().join(relpath);
+        //     remote_path
+        // };
+        // // TODO: implement this method
+        // // get relavent path
+        // let fm = local_source_file.ltm.deref();
+        // let remote_file = LocalFile {
+        //     path: remote_path,
+        //     sha256: RefCell::new(None),
+        //     ltm: Box::new(LocalTargetManager {
+        //         base_path: self.get_base_path(),
+        //     }),
+        // };
+        // if local_source_file != remote_file {
+        //     // TODO: Before copying files, we should
+        //     // make sure that target path exists!
+        //     log::debug!(
+        //         "Copying local file {} to local {}",
+        //         local_source_file.path.display(),
+        //         remote_file.path.display()
+        //     );
+        // }
         Ok(())
     }
 }
@@ -599,12 +637,15 @@ impl<'a> SshTargetManager<'a> {
     }
 }
 impl FolderManager for SshTargetManager<'_> {
-    fn get_base_path(&self) -> &str {
-        self.base_path.to_str().unwrap()
+    fn get_base_path(&self) -> PathBuf {
+        self.base_path.canonicalize().unwrap()
     }
 }
 impl TargetManager for SshTargetManager<'_> {
-    fn upload_file(&self, local_file: LocalFile) -> Result<(), anyhow::Error> {
+    fn receive_from_folder(
+        &self,
+        local_source_manager: LocalSourceManager,
+    ) -> Result<(), anyhow::Error> {
         // TODO
         Ok(())
     }
