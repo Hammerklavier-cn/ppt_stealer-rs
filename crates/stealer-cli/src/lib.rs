@@ -1,13 +1,42 @@
+use anyhow::Result;
 use log;
-use std::{collections::BTreeSet, process::exit};
+use std::collections::BTreeSet;
 
 mod watch_dog;
 
-use cli::{Commands, DebugLevel, ScanParams, ServerParams, TargetParams, UploadTarget, get_args};
+use cli::{ScanParams, ServerParams, TargetParams, UploadTarget};
 use file_management::{
-    LocalSourceManager, LocalTargetManager, SshKeyAuthentication, SshPasswordAuthentication,
-    SshRemoteAuthentication, SshTargetManager, TargetManager,
+    LocalSourceManager, LocalTargetManager, SshPasswordAuthentication, SshTargetManager,
+    TargetManager,
 };
+
+// 新增：定义一个新的 trait 用于擦除关联类型
+trait ErasedTargetManager {
+    fn receive_from_folder(
+        &self,
+        local_source_folder: LocalSourceManager,
+    ) -> Result<(), anyhow::Error>;
+}
+
+// 新增：为 LocalTargetManager 实现 ErasedTargetManager
+impl ErasedTargetManager for LocalTargetManager {
+    fn receive_from_folder(
+        &self,
+        local_source_folder: LocalSourceManager,
+    ) -> Result<(), anyhow::Error> {
+        TargetManager::receive_from_folder(self, local_source_folder)
+    }
+}
+
+// 新增：为 SshTargetManager 实现 ErasedTargetManager
+impl ErasedTargetManager for SshTargetManager {
+    fn receive_from_folder(
+        &self,
+        local_source_folder: LocalSourceManager,
+    ) -> Result<(), anyhow::Error> {
+        TargetManager::receive_from_folder(self, local_source_folder)
+    }
+}
 
 pub fn headless(scan_params: ScanParams, server_params: ServerParams, target_params: TargetParams) {
     log::info!("Executing headless function.");
@@ -16,45 +45,40 @@ pub fn headless(scan_params: ScanParams, server_params: ServerParams, target_par
 
     // connect to target file manager
     log::info!("Targets: {:?}", target_params.upload_targets);
-    let mut target_managers: Vec<Box<dyn TargetManager>> = vec![];
+    // 修改：使用新的 trait 对象类型
+    let mut target_managers: Vec<Box<dyn ErasedTargetManager>> = vec![];
     {
         let mut remote_server_selected = false;
         for upload_target in target_params.upload_targets {
-            let target_manager: Box<dyn TargetManager> = match upload_target {
-                UploadTarget::Local => Box::new(LocalTargetManager::new(
-                    target_params.target_folder_name.as_deref(),
-                )) as Box<dyn TargetManager>,
-
+            match upload_target {
+                UploadTarget::Local => {
+                    let manager =
+                        LocalTargetManager::new(target_params.target_folder_name.as_deref());
+                    target_managers.push(Box::new(manager) as Box<dyn ErasedTargetManager>);
+                }
                 UploadTarget::SshServer => {
                     if !remote_server_selected {
                         remote_server_selected = true;
-
                         let login_params = match server_params.password.as_deref() {
                             Some(passwd) => SshPasswordAuthentication {
-                                ip: server_params.ip.as_deref().unwrap(),
+                                ip: server_params.ip.as_ref().unwrap().clone(),
                                 port: server_params.port.unwrap(),
-                                username: server_params.username.as_deref().unwrap(),
-                                password: passwd,
+                                username: server_params.username.as_ref().unwrap().clone(),
+                                password: passwd.to_string(),
                             },
                             None => panic!("KeyAuth is currently unsupported!"),
                         };
-                        Box::new(SshTargetManager::new(Some("base_path"), login_params))
-                            as Box<dyn TargetManager>
-                    } else {
-                        continue;
+                        let manager = SshTargetManager::new(Some("base_path"), login_params);
+                        target_managers.push(Box::new(manager) as Box<dyn ErasedTargetManager>);
                     }
                 }
-
                 UploadTarget::SmbServer | UploadTarget::FtpServer => {
                     if !remote_server_selected {
                         remote_server_selected = true;
                         panic!("SMB and FTP are supported yet!");
-                    } else {
-                        continue;
                     }
                 }
             };
-            target_managers.push(target_manager);
         }
     }
 

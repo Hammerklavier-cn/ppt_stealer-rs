@@ -1,4 +1,4 @@
-use anyhow::{Error, Result, anyhow};
+use anyhow::{Context, Error, Result, anyhow};
 use chrono::Local;
 use log;
 use regex::Regex;
@@ -6,8 +6,10 @@ use sha2::{Digest, Sha256};
 use std::{
     cell::RefCell,
     collections::HashSet,
+    ffi::OsStr,
+    fs,
     hash::Hash,
-    io::Read,
+    io::{self, Read},
     path::{Path, PathBuf},
     rc::Rc,
 };
@@ -34,19 +36,56 @@ fn get_default_folder_name() -> PathBuf {
     path
 }
 
+// The following function is deprecated, but it still contains some useful implementation.
+// pub fn get_target_base_path(identifier_path: Option<&str>, folder_name: &str) -> PathBuf {
+//     let identifier_path = match identifier_path {
+//         Some(path) => Path::new(path).to_path_buf(),
+//         None => get_default_folder_name(),
+//     };
+//     identifier_path.join(
+//         folder_name
+//             .chars()
+//             .map(|c| match c {
+//                 c if c.is_ascii_alphanumeric() => c,
+//                 '-' | '_' | '.' | ' ' => c,
+//                 _ => '_',
+//             })
+//             .collect::<String>(),
+//     )
+// }
+
 /// Generate a `TargetFile` from a `LocalFile`.
-pub fn convert_local_file_to_target<T, U>(source: LocalFile, tm: Rc<RefCell<T>>) -> U
+///
+/// Example:
+/// Source file is /home/user/documents/report.pptx, and LocalSourceManager has a
+/// `base_path` of /home/user
+/// It will generate a target file with a path of
+/// `{TargetManager.base_path}/user/documents/report.pptx
+pub fn convert_local_file_to_target<T>(source: &LocalFile, tm: Rc<RefCell<T>>) -> T::File
 where
     // F: FolderManager,
     T: TargetManager,
-    U: TargetFile<T = T>,
 {
     let root_path = PathBuf::from(&source.ltm.borrow().get_base_path())
         .canonicalize()
         .unwrap();
-    let abspath = &source.path.canonicalize().unwrap();
-    let relpath = abspath.strip_prefix(&root_path).unwrap();
-    TargetFile::from_relpath(relpath, tm)
+    let root_folder = PathBuf::from(
+        root_path
+            .file_name()
+            .unwrap_or_else(|| OsStr::new(root_path.to_str().unwrap()))
+            .to_str()
+            .unwrap()
+            .chars()
+            .map(|c| match c {
+                c if c.is_ascii_alphanumeric() => c,
+                '-' | '_' | '.' | ' ' => c,
+                _ => '_',
+            })
+            .collect::<String>(),
+    );
+    let abspath = source.path.canonicalize().unwrap();
+    let relpath = root_folder.join(abspath.strip_prefix(&root_path).unwrap());
+    TargetFile::from_relpath(&relpath, tm)
 }
 
 pub trait SingleFile {
@@ -57,17 +96,21 @@ pub trait SingleFile {
     fn get_new_sha256(&self) -> Result<String, Error>;
 }
 
-pub trait SourceFile: SingleFile {
-    fn upload_to_folder<T: TargetManager>(&self, target_manager: Rc<RefCell<T>>);
-}
+// pub trait SourceFile: SingleFile {
+//     fn upload_to_folder<T: TargetManager>(
+//         &self,
+//         target_manager: Rc<RefCell<T>>,
+//     ) -> Result<(), Error>;
+//     // fn upload_to_file<T: TargetFile>(&self, target_file: &T) -> Result<(), Error>;
+// }
 
 pub trait TargetFile: SingleFile {
-    type T: TargetManager;
-    fn from_relpath(relpath: &Path, fm: Rc<RefCell<Self::T>>) -> Self;
+    type Manager: TargetManager<File = Self>;
+    fn from_relpath(relpath: &Path, fm: Rc<RefCell<Self::Manager>>) -> Self;
     /// Make sure that self.path is a valid remote path. If it is not, create
     /// the folders.
     fn initialise_path(&self) -> Result<(), Error>;
-    fn receive_from_file(&self) -> Result<(), Error>;
+    fn receive_from_file(&self, source_file: &LocalFile) -> Result<(), Error>;
 }
 
 /// This struct depicts a local file.
@@ -79,11 +122,24 @@ pub trait TargetFile: SingleFile {
 ///   from which the local file is scanned
 /// - sha256 (RefCell<Option<String>>): sha256sum of the local
 ///   file whose value updates lazily
-// #[derive(Eq)]
+#[derive(Clone)]
 pub struct LocalFile {
     pub path: PathBuf,
     sha256: RefCell<Option<String>>,
     ltm: Rc<RefCell<dyn LocalFolderManager>>,
+}
+impl LocalFile {
+    fn upload_to_folder<T: TargetManager>(
+        &self,
+        target_manager: Rc<RefCell<T>>,
+    ) -> Result<(), Error> {
+        // TODO
+
+        // get corresponding `TargetFile` according to `self` and `target_manager`
+        let target_file = convert_local_file_to_target(self, target_manager.clone());
+
+        Ok(())
+    }
 }
 impl SingleFile for LocalFile {
     fn is_exists(&self) -> Result<bool, Error> {
@@ -146,13 +202,30 @@ impl SingleFile for LocalFile {
     }
 }
 impl TargetFile for LocalFile {
-    type T = LocalTargetManager;
-    fn from_relpath(relpath: &Path, fm: Rc<RefCell<Self::T>>) -> Self {
+    type Manager = LocalTargetManager;
+    fn from_relpath(relpath: &Path, fm: Rc<RefCell<Self::Manager>>) -> Self {
         Self {
             path: fm.borrow().base_path.join(relpath).canonicalize().unwrap(),
             sha256: RefCell::new(None),
             ltm: fm.clone(),
         }
+    }
+    fn initialise_path(&self) -> Result<(), Error> {
+        std::fs::create_dir_all(self.path.parent().unwrap()).with_context(|| {
+            anyhow!(
+                "Failed to create folder for {}, most possibly because of permission issues.",
+                self.path.display()
+            )
+        });
+
+        Ok(())
+    }
+    fn receive_from_file(&self, source_file: &LocalFile) -> Result<(), Error> {
+        let mut remote_file_io = fs::File::open(&self.path)?;
+        let mut local_file_io = fs::File::open(&*source_file.path)?;
+
+        io::copy(&mut local_file_io, &mut remote_file_io)?;
+        Ok(())
     }
 }
 impl PartialEq for LocalFile {
@@ -163,7 +236,7 @@ impl PartialEq for LocalFile {
 impl Eq for LocalFile {}
 impl PartialEq for Box<dyn SingleFile> {
     fn eq(&self, other: &Self) -> bool {
-        self.get_sha256().ok().as_deref() == other.get_sha256().ok().as_deref()
+        self.get_new_sha256().ok().as_deref() == other.get_new_sha256().ok().as_deref()
     }
 }
 impl Eq for Box<dyn SingleFile> {}
@@ -190,12 +263,13 @@ impl Hash for LocalFile {
 /// There can be no file at `SshTargetFile.path`, in which case
 /// `SshTargetFile.sha256_cell` is RefCell<None> and
 /// `SshTargetFile.is_exists()` returns Ok(false).
-pub struct SshTargetFile<'a> {
+#[derive(Clone)]
+pub struct SshTargetFile {
     pub path: PathBuf,
     sha256_cell: RefCell<Option<String>>,
-    ssh_manager: Rc<RefCell<SshTargetManager<'a>>>,
+    ssh_manager: Rc<RefCell<SshTargetManager>>,
 }
-impl SingleFile for SshTargetFile<'_> {
+impl SingleFile for SshTargetFile {
     fn is_exists(&self) -> Result<bool, Error> {
         let mut ssh_manager = self.ssh_manager.borrow_mut();
 
@@ -315,14 +389,68 @@ impl SingleFile for SshTargetFile<'_> {
         return sha256;
     }
 }
-impl<'a> TargetFile for SshTargetFile<'a> {
-    type T = SshTargetManager<'a>;
-    fn from_relpath(relpath: &Path, fm: Rc<RefCell<SshTargetManager<'a>>>) -> Self {
+impl TargetFile for SshTargetFile {
+    type Manager = SshTargetManager;
+    fn from_relpath(relpath: &Path, fm: Rc<RefCell<SshTargetManager>>) -> Self {
         Self {
             path: fm.borrow().base_path.join(relpath).canonicalize().unwrap(),
             sha256_cell: RefCell::new(None),
             ssh_manager: fm.clone(),
         }
+    }
+    fn initialise_path(&self) -> Result<(), Error> {
+        // This method implements an inefficient algorithm to detect and create directories,
+        // but its stability has been proven by time.
+        let mut ssh_manager = self.ssh_manager.borrow_mut();
+        let sftp = ssh_manager.get_sftp()?;
+        log::debug!("sftp connection established");
+
+        let remote_dirpath = self.path.parent().unwrap();
+
+        loop {
+            if sftp.stat(remote_dirpath).is_ok() {
+                log::debug!("Remote folder '{}' exists!", remote_dirpath.display());
+                break;
+            }
+            let mut temp_path = remote_dirpath;
+            loop {
+                let parent_folder = temp_path.parent().unwrap();
+                if sftp.stat(parent_folder).is_ok() {
+                    log::trace!(
+                        "Remote folder '{}' exists. Now create child folder '{}'.",
+                        parent_folder.display(),
+                        temp_path.display()
+                    );
+                    sftp.mkdir(temp_path, 0o755).or_else(|e| {
+                        Err(anyhow!(
+                            "Failed to create remote folder at '{}': {}",
+                            temp_path.display(),
+                            e
+                        ))
+                    })?;
+                    log::trace!("Remote folder '{}' created.", temp_path.display());
+                } else {
+                    log::trace!("Remote folder '{}' does not exist!", temp_path.display());
+                    temp_path = parent_folder;
+                }
+            }
+        }
+
+        Ok(())
+    }
+    fn receive_from_file(&self, source_file: &LocalFile) -> Result<(), Error> {
+        // TODO
+        // First compare the two file
+        let self_box = Box::new(self.clone()) as Box<dyn SingleFile>;
+        let source_box = Box::new(source_file.clone()) as Box<dyn SingleFile>;
+
+        if self_box == source_box {
+            return Ok(());
+        }
+        //
+        let mut sftp = self.ssh_manager.borrow_mut().get_sftp()?;
+        let mut remote_file_io = sftp.create(&*self.path)?;
+        Ok(())
     }
 }
 
@@ -340,7 +468,10 @@ pub trait LocalFolderManager: FolderManager {
 /// There is no method called `receive_from_file` as it will be a (relatively)
 /// very inefficient process. Use `upload_from_folder`, or `SourceManager::upload_to_folder`
 /// instead.
+///
+/// All members of TargetManager should implement `new` method.
 pub trait TargetManager: FolderManager {
+    type File: TargetFile<Manager = Self>;
     /// Note that another `target_file` parameter should be added to this trait method!
     /// Maybe this method can be remove, and converted to a function.
     fn receive_from_folder(
@@ -465,7 +596,7 @@ impl LocalSourceManager {
         }
         Ok(files)
     }
-    fn upload_to_folder(&self, target_manager: Rc<RefCell<dyn TargetManager>>) -> Result<()> {
+    fn upload_to_folder<T: TargetManager>(&self, target_manager: Rc<RefCell<T>>) -> Result<()> {
         // TODO: implementation
         Ok(())
     }
@@ -502,9 +633,10 @@ impl FolderManager for LocalTargetManager {
 }
 impl LocalFolderManager for LocalTargetManager {}
 impl TargetManager for LocalTargetManager {
+    type File = LocalFile;
     fn receive_from_folder(
         &self,
-        local_source_file: LocalSourceManager,
+        local_source_folder: LocalSourceManager,
     ) -> Result<(), anyhow::Error> {
         // let remote_path = {
         //     let source_path = local_source_file.base_path.clone();
@@ -540,31 +672,31 @@ pub trait SshRemoteAuthentication {
     fn authenticate(&self) -> Result<ssh2::Session, Error>;
 }
 
-pub struct SshPasswordAuthentication<'a> {
-    pub ip: &'a str,
+pub struct SshPasswordAuthentication {
+    pub ip: String,
     pub port: i64,
-    pub username: &'a str,
-    pub password: &'a str,
+    pub username: String,
+    pub password: String,
 }
-impl<'a> SshRemoteAuthentication for SshPasswordAuthentication<'a> {
+impl SshRemoteAuthentication for SshPasswordAuthentication {
     fn authenticate(&self) -> Result<ssh2::Session, Error> {
         log::info!("Connecting to SSH server with password...");
         let tcp = std::net::TcpStream::connect(format!("{}:{}", self.ip, self.port))?;
         let mut session = ssh2::Session::new()?;
         session.set_tcp_stream(tcp);
         session.handshake()?;
-        session.userauth_password(self.username, self.password)?;
+        session.userauth_password(&self.username, &self.password)?;
         return Ok(session);
     }
 }
 
-pub struct SshKeyAuthentication<'a> {
-    pub ip: &'a str,
+pub struct SshKeyAuthentication {
+    pub ip: String,
     pub port: i64,
-    pub username: &'a str,
-    pub pem_key: Option<&'a str>,
+    pub username: String,
+    pub pem_key: Option<String>,
 }
-impl<'a> SshRemoteAuthentication for SshKeyAuthentication<'a> {
+impl SshRemoteAuthentication for SshKeyAuthentication {
     fn authenticate(&self) -> Result<ssh2::Session, Error> {
         // "SSH Key authentication is not supported yet!"
         Err(anyhow!("SSH Key authentication is not supported yet!"))
@@ -573,14 +705,14 @@ impl<'a> SshRemoteAuthentication for SshKeyAuthentication<'a> {
 
 /// manager for a folder which is accessible via SSH and to which
 /// local files will be uploaded to
-pub struct SshTargetManager<'a> {
+pub struct SshTargetManager {
     pub base_path: PathBuf,
-    pub login_params: Box<dyn SshRemoteAuthentication + 'a>,
+    pub login_params: Box<dyn SshRemoteAuthentication>,
     pub session: ssh2::Session,
 }
-impl<'a> SshTargetManager<'a> {
-    pub fn new<T: SshRemoteAuthentication + 'a>(
-        base_path: Option<&'a str>,
+impl SshTargetManager {
+    pub fn new<T: SshRemoteAuthentication + 'static>(
+        base_path: Option<&str>,
         login_params: T,
     ) -> Self {
         let connection = login_params.authenticate().unwrap();
@@ -589,7 +721,7 @@ impl<'a> SshTargetManager<'a> {
                 Some(path) => PathBuf::from(path),
                 None => get_default_folder_name(),
             },
-            login_params: Box::new(login_params) as Box<dyn SshRemoteAuthentication + 'a>,
+            login_params: Box::new(login_params) as Box<dyn SshRemoteAuthentication + 'static>,
             session: connection,
         }
     }
@@ -636,15 +768,16 @@ impl<'a> SshTargetManager<'a> {
         return Err(anyhow!("Failed to establish channel connection"));
     }
 }
-impl FolderManager for SshTargetManager<'_> {
+impl FolderManager for SshTargetManager {
     fn get_base_path(&self) -> PathBuf {
         self.base_path.canonicalize().unwrap()
     }
 }
-impl TargetManager for SshTargetManager<'_> {
+impl TargetManager for SshTargetManager {
+    type File = SshTargetFile;
     fn receive_from_folder(
         &self,
-        local_source_manager: LocalSourceManager,
+        local_source_folder: LocalSourceManager,
     ) -> Result<(), anyhow::Error> {
         // TODO
         Ok(())
