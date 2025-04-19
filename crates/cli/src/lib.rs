@@ -12,7 +12,6 @@ use clap::{ArgGroup, Args, Parser, Subcommand, ValueEnum};
 {all-args}
 
 {after-help}")]
-
 pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Commands>,
