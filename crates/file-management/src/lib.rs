@@ -136,7 +136,9 @@ impl LocalFile {
         // TODO
 
         // get corresponding `TargetFile` according to `self` and `target_manager`
-        let target_file = convert_local_file_to_target(self, target_manager.clone());
+        let target_file = convert_local_file_to_target(self, Rc::clone(&target_manager));
+
+        TargetFile::receive_from_file(&target_file, self)?;
 
         Ok(())
     }
@@ -216,7 +218,7 @@ impl TargetFile for LocalFile {
                 "Failed to create folder for {}, most possibly because of permission issues.",
                 self.path.display()
             )
-        });
+        })?;
 
         Ok(())
     }
@@ -596,7 +598,7 @@ impl LocalSourceManager {
         }
         Ok(files)
     }
-    fn upload_to_folder<T: TargetManager>(&self, target_manager: Rc<RefCell<T>>) -> Result<()> {
+    pub fn upload_to_folder<T: TargetManager>(&self, target_manager: Rc<RefCell<T>>) -> Result<()> {
         // TODO: implementation
         Ok(())
     }
