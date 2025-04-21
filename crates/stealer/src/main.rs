@@ -47,6 +47,9 @@ fn main() {
         None => {
             log::info!("No subcommand specified. GUI mode is chosen by default.");
             log::error!("GUI is not supported yet!");
+
+            gtk4_interface::main_launcher();
+
             exit(1)
         }
     };
