@@ -1,6 +1,6 @@
 use anyhow::Result;
 use log;
-use std::collections::BTreeSet;
+use std::{cell::RefCell, collections::BTreeSet, rc::Rc};
 
 mod watch_dog;
 
@@ -15,6 +15,10 @@ trait ErasedTargetManager {
     fn receive_from_folder(
         &self,
         local_source_folder: LocalSourceManager,
+        exts: &[&str],
+        regex: Option<&str>,
+        min_depth: Option<usize>,
+        max_depth: Option<usize>,
     ) -> Result<(), anyhow::Error>;
 }
 
@@ -23,8 +27,19 @@ impl ErasedTargetManager for LocalTargetManager {
     fn receive_from_folder(
         &self,
         local_source_folder: LocalSourceManager,
+        exts: &[&str],
+        regex: Option<&str>,
+        min_depth: Option<usize>,
+        max_depth: Option<usize>,
     ) -> Result<(), anyhow::Error> {
-        TargetManager::receive_from_folder(self, local_source_folder)
+        let local_target_manager = Rc::new(RefCell::new(self.clone()));
+        local_source_folder.upload_to_folder(
+            local_target_manager,
+            exts,
+            regex,
+            min_depth,
+            max_depth,
+        )
     }
 }
 
@@ -33,8 +48,19 @@ impl ErasedTargetManager for SshTargetManager {
     fn receive_from_folder(
         &self,
         local_source_folder: LocalSourceManager,
+        exts: &[&str],
+        regex: Option<&str>,
+        min_depth: Option<usize>,
+        max_depth: Option<usize>,
     ) -> Result<(), anyhow::Error> {
-        TargetManager::receive_from_folder(self, local_source_folder)
+        let local_target_manager = Rc::new(RefCell::new(self.clone()));
+        local_source_folder.upload_to_folder(
+            local_target_manager,
+            exts,
+            regex,
+            min_depth,
+            max_depth,
+        )
     }
 }
 

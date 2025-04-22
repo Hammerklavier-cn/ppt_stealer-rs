@@ -91,6 +91,7 @@ where
 pub trait SingleFile {
     /// Return error if connection failed to establish
     fn is_exists(&self) -> Result<bool, Error>;
+    fn get_abs_path(&self) -> Result<PathBuf, Error>;
     fn get_relpath(&self) -> Result<PathBuf, Error>;
     fn get_sha256(&self) -> Result<String, Error>;
     fn get_new_sha256(&self) -> Result<String, Error>;
@@ -133,8 +134,6 @@ impl LocalFile {
         &self,
         target_manager: Rc<RefCell<T>>,
     ) -> Result<(), Error> {
-        // TODO
-
         // get corresponding `TargetFile` according to `self` and `target_manager`
         let target_file = convert_local_file_to_target(self, Rc::clone(&target_manager));
 
@@ -146,6 +145,10 @@ impl LocalFile {
 impl SingleFile for LocalFile {
     fn is_exists(&self) -> Result<bool, Error> {
         Ok(self.path.exists())
+    }
+
+    fn get_abs_path(&self) -> Result<PathBuf, Error> {
+        Ok(self.path.canonicalize()?)
     }
 
     fn get_relpath(&self) -> Result<PathBuf, Error> {
@@ -282,6 +285,10 @@ impl SingleFile for SshTargetFile {
             Err(_) => false,
         };
         Ok(exist_or_not)
+    }
+
+    fn get_abs_path(&self) -> Result<PathBuf, Error> {
+        Ok(self.path.canonicalize()?)
     }
 
     fn get_relpath(&self) -> Result<PathBuf, Error> {
@@ -441,7 +448,6 @@ impl TargetFile for SshTargetFile {
         Ok(())
     }
     fn receive_from_file(&self, source_file: &LocalFile) -> Result<(), Error> {
-        // TODO
         // First compare the two file
         let self_box = Box::new(self.clone()) as Box<dyn SingleFile>;
         let source_box = Box::new(source_file.clone()) as Box<dyn SingleFile>;
@@ -449,10 +455,37 @@ impl TargetFile for SshTargetFile {
         if self_box == source_box {
             return Ok(());
         }
-        //
+
+        // If the two files are not the same, upload the local file.
         let mut sftp = self.ssh_manager.borrow_mut().get_sftp()?;
-        let mut remote_file_io = sftp.create(&*self.path)?;
-        Ok(())
+        let mut remote_file_io = sftp.create(&self.get_abs_path()?)?;
+
+        let mut local_file_io = std::fs::File::open(&source_file.get_abs_path()?)?;
+
+        match io::copy(&mut local_file_io, &mut remote_file_io) {
+            Ok(_) => {
+                log::debug!(
+                    "Uploaded {} to {} successfully.",
+                    &source_file.get_abs_path().unwrap().display(),
+                    &self.get_abs_path().unwrap().display(),
+                );
+                Ok(())
+            }
+            Err(e) => {
+                log::error!(
+                    "Failed to upload {} to {}: {}",
+                    &source_file.get_abs_path().unwrap().display(),
+                    &self.get_abs_path().unwrap().display(),
+                    e
+                );
+                Err(anyhow!(
+                    "Failed to upload {} to {}: {}",
+                    &source_file.get_abs_path().unwrap().display(),
+                    &self.get_abs_path().unwrap().display(),
+                    e
+                ))
+            }
+        }
     }
 }
 
@@ -479,6 +512,10 @@ pub trait TargetManager: FolderManager {
     fn receive_from_folder(
         &self,
         local_source_folder: LocalSourceManager,
+        exts: &[&str],
+        regex: Option<&str>,
+        min_depth: Option<usize>,
+        max_depth: Option<usize>,
     ) -> Result<(), anyhow::Error>;
     // fn base_path_initialise(&self) -> Result<(), anyhow::Error>;
 }
@@ -598,8 +635,18 @@ impl LocalSourceManager {
         }
         Ok(files)
     }
-    pub fn upload_to_folder<T: TargetManager>(&self, target_manager: Rc<RefCell<T>>) -> Result<()> {
-        // TODO: implementation
+    pub fn upload_to_folder<T: TargetManager>(
+        &self,
+        target_manager: Rc<RefCell<T>>,
+        exts: &[&str],
+        regex: Option<&str>,
+        min_depth: Option<usize>,
+        max_depth: Option<usize>,
+    ) -> Result<()> {
+        let files = self.get_files(exts, regex, min_depth, max_depth)?;
+        for file in files {
+            file.upload_to_folder(target_manager.clone())?;
+        }
         Ok(())
     }
 }
@@ -614,7 +661,7 @@ impl LocalFolderManager for LocalSourceManager {}
 ///
 /// `self.base_path` is the root folder based on which files will
 /// be uploaded according to the relative path.
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone)]
 pub struct LocalTargetManager {
     pub base_path: PathBuf,
 }
@@ -639,34 +686,19 @@ impl TargetManager for LocalTargetManager {
     fn receive_from_folder(
         &self,
         local_source_folder: LocalSourceManager,
+        exts: &[&str],
+        regex: Option<&str>,
+        min_depth: Option<usize>,
+        max_depth: Option<usize>,
     ) -> Result<(), anyhow::Error> {
-        // let remote_path = {
-        //     let source_path = local_source_file.base_path.clone();
-        //     let source_root_path = local_source_file.ltm.deref().borrow().get_base_path();
-        //     let relpath = source_path.strip_prefix(source_root_path)?;
-        //     let remote_path = self.get_base_path().join(relpath);
-        //     remote_path
-        // };
-        // // TODO: implement this method
-        // // get relavent path
-        // let fm = local_source_file.ltm.deref();
-        // let remote_file = LocalFile {
-        //     path: remote_path,
-        //     sha256: RefCell::new(None),
-        //     ltm: Box::new(LocalTargetManager {
-        //         base_path: self.get_base_path(),
-        //     }),
-        // };
-        // if local_source_file != remote_file {
-        //     // TODO: Before copying files, we should
-        //     // make sure that target path exists!
-        //     log::debug!(
-        //         "Copying local file {} to local {}",
-        //         local_source_file.path.display(),
-        //         remote_file.path.display()
-        //     );
-        // }
-        Ok(())
+        let local_target_manager = Rc::new(RefCell::new(self.clone()));
+        local_source_folder.upload_to_folder(
+            local_target_manager,
+            exts,
+            regex,
+            min_depth,
+            max_depth,
+        )
     }
 }
 
@@ -674,6 +706,7 @@ pub trait SshRemoteAuthentication {
     fn authenticate(&self) -> Result<ssh2::Session, Error>;
 }
 
+#[derive(Clone)]
 pub struct SshPasswordAuthentication {
     pub ip: String,
     pub port: i64,
@@ -692,6 +725,7 @@ impl SshRemoteAuthentication for SshPasswordAuthentication {
     }
 }
 
+#[derive(Clone)]
 pub struct SshKeyAuthentication {
     pub ip: String,
     pub port: i64,
@@ -709,7 +743,7 @@ impl SshRemoteAuthentication for SshKeyAuthentication {
 /// local files will be uploaded to
 pub struct SshTargetManager {
     pub base_path: PathBuf,
-    pub login_params: Box<dyn SshRemoteAuthentication>,
+    pub login_params: Rc<dyn SshRemoteAuthentication>,
     pub session: ssh2::Session,
 }
 impl SshTargetManager {
@@ -723,7 +757,7 @@ impl SshTargetManager {
                 Some(path) => PathBuf::from(path),
                 None => get_default_folder_name(),
             },
-            login_params: Box::new(login_params) as Box<dyn SshRemoteAuthentication + 'static>,
+            login_params: Rc::new(login_params),
             session: connection,
         }
     }
@@ -780,8 +814,27 @@ impl TargetManager for SshTargetManager {
     fn receive_from_folder(
         &self,
         local_source_folder: LocalSourceManager,
+        exts: &[&str],
+        regex: Option<&str>,
+        min_depth: Option<usize>,
+        max_depth: Option<usize>,
     ) -> Result<(), anyhow::Error> {
-        // TODO
-        Ok(())
+        let local_target_manager = Rc::new(RefCell::new(self.clone()));
+        local_source_folder.upload_to_folder(
+            local_target_manager,
+            exts,
+            regex,
+            min_depth,
+            max_depth,
+        )
+    }
+}
+impl Clone for SshTargetManager {
+    fn clone(&self) -> Self {
+        Self {
+            base_path: self.base_path.clone(),
+            login_params: Rc::clone(&self.login_params),
+            session: self.session.clone(),
+        }
     }
 }
