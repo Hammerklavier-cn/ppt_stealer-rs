@@ -237,10 +237,21 @@ impl TargetFile for LocalFile {
     fn receive_from_file(&self, source_file: &LocalFile) -> Result<(), Error> {
         self.initialise_path()?;
 
-        let mut remote_file_io = fs::File::open(&self.path)?;
+        log::debug!(
+            "Receiving file `{}` from `{}`",
+            self.path.display(),
+            source_file.path.display()
+        );
+        let mut remote_file_io = fs::File::create(&self.path)?;
         let mut local_file_io = fs::File::open(&*source_file.path)?;
 
         io::copy(&mut local_file_io, &mut remote_file_io)?;
+
+        log::debug!(
+            "Uploaded {} to {} successfully.",
+            &source_file.get_path().unwrap().display(),
+            &self.get_path().unwrap().display(),
+        );
         Ok(())
     }
     fn exists(&self) -> Result<bool, Error> {
@@ -716,6 +727,7 @@ impl LocalSourceManager {
             self.base_path.display(),
             target_manager.borrow().get_base_path().display()
         );
+        // println!("{} files will be uploaded", files.len());
         for file in files {
             file.upload_to_folder(target_manager.clone())?;
         }
