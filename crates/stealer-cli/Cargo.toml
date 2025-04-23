@@ -1,0 +1,22 @@
+[package]
+name = "stealer-cli"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description.workspace = true
+readme.workspace = true
+
+# [[bin]]
+# name = "stealer-cli"
+# path = "src/main.rs"
+
+[dependencies]
+cli = { path = "../cli" }
+file-management = { path = "../file-management" }
+
+log = "0.4.26"
+env_logger = "0.11.7"
+dirs = "5.0.1"
+sysinfo = "0.33.0"
+anyhow = "1.0.97"
+walkdir = "2.5.0"

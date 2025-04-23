@@ -1,7 +1,8 @@
 use chrono::Local;
 use clap::{ArgGroup, Args, Parser, ValueEnum};
-use connection_tools::SshSessionGuard;
+// use connection_tools::SshSessionGuard;
 use env_logger;
+use gethostname::gethostname;
 use log;
 use ssh2::Session;
 use std::collections::HashMap;
@@ -200,20 +201,21 @@ fn no_gui(desktop_path: &Path, args: &Cli) {
 
     let sess: Arc<Mutex<Session>> = Arc::new(Mutex::new(establish_ssh_connection(&args)));
 
-    let _sess_guard = SshSessionGuard { session: &sess };
-
-    // TODO: Have SshSessionGuard replace the mutex.
     // make sure ssh connection closed after Ctrl+C.
-    ctrlc::set_handler({
-        let sess = Arc::clone(&sess);
-        move || {
-            log::info!("Ctrl+C detected. Exiting...");
-            let sess = sess.lock().unwrap();
-            sess.disconnect(None, "CtrlC detected", None)
-                .expect("Failed to disconnect from SSH server.");
-            log::info!("SSH session closed.");
-            std::process::exit(0);
-        }
+    // ctrlc::set_handler({
+    //     let sess = Arc::clone(&sess);
+    //     move || {
+    //         log::info!("Ctrl+C detected. Exiting...");
+    //         let sess = sess.lock().unwrap();
+    //         sess.disconnect(None, "CtrlC detected", None)
+    //             .expect("Failed to disconnect from SSH server.");
+    //         log::info!("SSH session closed.");
+    //         std::process::exit(0);
+    //     }
+    // })
+    ctrlc::set_handler(|| {
+        log::info!("Ctrl+C detected. Exiting...");
+        std::process::exit(0);
     })
     .expect("Error setting Ctrl+C handler.");
 
@@ -337,13 +339,25 @@ fn no_gui(desktop_path: &Path, args: &Cli) {
                 let mut files_and_roots_path: Vec<[&Path; 2]> = vec![];
                 for path in changed_files.iter() {
                     log::debug!("Get root path of {}", path.display());
-                    let root_path = root_of_paths_map.get(path.as_path()).unwrap(); // TODO: Make this configurable.
-                    files_and_roots_path.push([path.as_path(), root_path]);
+                    let root_path = match root_of_paths_map.get(path.as_path()) {
+                        Some(path) => path,
+                        None => {
+                            log::warn!(
+                                "Failed to find the root of {} from the dict!
+                                There must be vulnerability in the code. Please
+                                create an issue for the project. Now assume it to
+                                be empty.",
+                                path.display()
+                            );
+                            Path::new("")
+                        }
+                    };
+                    files_and_roots_path.push([&path, root_path]);
                 }
                 files_and_roots_path
             };
 
-            upload_files(&files_and_roots_path, &args, &sess);
+            upload_files(&files_and_roots_path, &sess, &args.remote_folder_name);
 
             log::info!("Upload completed.");
         } else {
@@ -383,9 +397,10 @@ fn establish_ssh_connection(args: &Cli) -> Session {
     sess.set_tcp_stream(tcp);
     sess.handshake().unwrap();
     if args.key_auth {
+        log::warn!("Key authentication is not ready yet!");
         let private_key_path = dirs::home_dir().unwrap().join(".ssh/id_rsa");
         log::debug!(
-            "Authenticating with rivate key: {}",
+            "Authenticating with private key: {}",
             private_key_path.display()
         );
 
@@ -398,16 +413,16 @@ fn establish_ssh_connection(args: &Cli) -> Session {
             None,
         )
         .expect("Failed to authenticate with SSH key.");
-    } else {
+    } else if let Some(password) = &args.password {
         sess.userauth_password(
             args.username
                 .as_ref()
                 .expect("On no GUI mode, SSH username is required!"),
-            args.password
-                .as_ref()
-                .expect("On no GUI mode, SSH password is required!"),
+            password,
         )
         .expect("Failed to authenticate with SSH password.");
+    } else {
+        // Feature: Authentication with OpenSSH public key
     }
     assert!(sess.authenticated());
     log::info!("SSH Authentication successful.");
@@ -416,9 +431,7 @@ fn establish_ssh_connection(args: &Cli) -> Session {
 }
 
 /**
-   This is a new implementation of `upload_changed_files_deprecated`.
-   Not only is it able to upload the files to `YYYY-MM-DD/args.remote_folder_name` or `YYYY-MM-DD/$USERNAME`,
-   but it also keep the relative path of the files to desktop_path, USB drive root, etc.
+   Upload files to `YYYY-MM-DD/remote_folder_name` if `remote_folder_name` is not `None`.
 
    ## Args
    ### changed_files:
@@ -427,14 +440,16 @@ fn establish_ssh_connection(args: &Cli) -> Session {
    - The second is the path of the root folder, by which a relative path is calculated.
    With the relative path, a directory is created on the remote machine,
    and the file is uploaded to that directory.
-   ### args:
-   The arguments passed to the program.
    ### sess:
-   The SSH session.
+   Shared SSH session.
+   ### remote_folder_name:
+   Customised remote folder name. Optional.
 */
-fn upload_files(files_and_roots_path: &[[&Path; 2]], args: &Cli, sess: &Arc<Mutex<Session>>) {
-    // TODO: Replace `args` with specific parameters!
-    //       And don't forget to update the documentation!
+fn upload_files(
+    files_and_roots_path: &[[&Path; 2]],
+    sess: &Arc<Mutex<Session>>,
+    remote_folder_name: &Option<String>,
+) {
     // establish sftp session
     let sess = sess.lock().unwrap();
     let sftp = { sess.sftp().unwrap() };
@@ -442,13 +457,12 @@ fn upload_files(files_and_roots_path: &[[&Path; 2]], args: &Cli, sess: &Arc<Mute
 
     // create a remote folder for this computer and the date.
     let remote_folder_name = {
-        // TODO: Remove the duplicated `match` case.
-        match &args.remote_folder_name {
+        match remote_folder_name {
             Some(name) => name.clone(),
             None => {
                 let formatted_date = Local::now().format("%Y-%m-%d").to_string();
 
-                let computer_identifier = match args.remote_folder_name.as_ref() {
+                let computer_identifier = match gethostname().to_str() {
                     Some(name) => name.to_string(),
                     None => {
                         let home_dir = dirs::home_dir().unwrap();
@@ -466,16 +480,15 @@ fn upload_files(files_and_roots_path: &[[&Path; 2]], args: &Cli, sess: &Arc<Mute
         }
     };
 
-    // TODO: get relative path of files, create corresponding folders on the remote machine, and upload files.
-    for [file_path, root_path] in files_and_roots_path.iter() {
+    for &[file_path, root_path] in files_and_roots_path.iter() {
         let root_path_parent = match root_path.parent() {
             Some(parent) => parent,
             None => Path::new(root_path.to_str().unwrap()),
         };
         log::debug!(
-            "Stripping prefix of file path {} by root path {:?}",
+            "Stripping prefix of file path {} by root path {}",
             file_path.display(),
-            root_path_parent
+            root_path_parent.display()
         );
         let relative_path = file_path
             .strip_prefix(root_path_parent)
@@ -567,7 +580,7 @@ fn upload_files(files_and_roots_path: &[[&Path; 2]], args: &Cli, sess: &Arc<Mute
                     "sha256sum '{}' | awk '{{print $1}}'",
                     remote_path.to_str().unwrap().replace("\\", "/")
                 );
-                log::debug!("Executing command: '{}'", cmd);
+                log::trace!("Executing command: '{}'", cmd);
                 channel.exec(&cmd).unwrap();
 
                 let mut remote_hash = String::new();
@@ -580,7 +593,7 @@ fn upload_files(files_and_roots_path: &[[&Path; 2]], args: &Cli, sess: &Arc<Mute
 
                 match channel.exit_status() {
                     Ok(0) => {
-                        log::debug!(
+                        log::trace!(
                             "Hash of remote file {} is {}",
                             remote_path.display(),
                             remote_hash
@@ -602,7 +615,7 @@ fn upload_files(files_and_roots_path: &[[&Path; 2]], args: &Cli, sess: &Arc<Mute
                 // get local hash
                 let local_hash = match watch_dog::get_file_sha256(file_path) {
                     Ok(hash) => {
-                        log::debug!("Hash of local file {} is {}", file_path.display(), hash);
+                        log::trace!("Hash of local file {} is {}", file_path.display(), hash);
                         hash
                     }
                     Err(err) => {
@@ -613,14 +626,14 @@ fn upload_files(files_and_roots_path: &[[&Path; 2]], args: &Cli, sess: &Arc<Mute
 
                 // compare hashes
                 if remote_hash == local_hash {
-                    log::info!(
+                    log::debug!(
                         "Remote file {} is the same as local file {}, skip uploading.",
                         remote_path.display(),
                         file_path.display()
                     );
                     continue;
                 } else {
-                    log::info!(
+                    log::debug!(
                         "Remote file {} is different from local file {}, uploading.",
                         remote_path.display(),
                         file_path.display()
@@ -658,6 +671,11 @@ fn upload_files(files_and_roots_path: &[[&Path; 2]], args: &Cli, sess: &Arc<Mute
         };
 
         // copy file
+        log::trace!(
+            "Copying {} to {}...",
+            (*file_path).display(),
+            remote_path.display()
+        );
         match io::copy(&mut local_file, &mut remote_file) {
             Ok(_) => {
                 log::info!(
@@ -675,106 +693,6 @@ fn upload_files(files_and_roots_path: &[[&Path; 2]], args: &Cli, sess: &Arc<Mute
                 continue;
             }
         };
-    }
-    log::info!("Finished uploading files.");
-}
-
-/// ### This function is deprecated.
-/// A new function will replace this, which is able to keep the relative path of the files.
-/// Upload changed files through SFTP.
-/// determine remote folder name where the files will be uploaded.
-/// The remote folder name is {YYYY-MM-DD/args.remote_folder_name} if args.remote_folder_name is Some(),
-/// otherwise it is {YYYY-MM-DD/$USERNAME}.
-fn _upload_changed_files_deprecated(
-    changed_files: Vec<PathBuf>,
-    args: &Cli,
-    sess: &Arc<Mutex<Session>>,
-) {
-    let formatted_date = Local::now().format("%Y-%m-%d").to_string();
-
-    let remote_folder_name = {
-        let computer_identifier = match args.remote_folder_name.as_ref() {
-            Some(name) => name.to_string(),
-            None => {
-                let home_dir = dirs::home_dir().unwrap();
-                home_dir.file_name().unwrap().to_str().unwrap().to_string()
-            }
-        };
-
-        format!("{}/{}", formatted_date, computer_identifier)
-    };
-
-    log::info!("Uploading changed files to {}", remote_folder_name);
-
-    // establish sftp session
-    let sftp = {
-        let sess = sess.lock().unwrap();
-        sess.sftp().unwrap()
-    };
-    log::info!("SFTP session established.");
-
-    // 检查远程文件夹是否存在
-    {
-        let remote_folder_exists = sftp.stat(Path::new(&formatted_date)).is_ok();
-
-        if !remote_folder_exists {
-            log::debug!(
-                "Remote folder '{}' does not exist, creating it.",
-                &formatted_date
-            );
-            // 创建远程文件夹
-            sftp.mkdir(Path::new(&formatted_date), 0o755)
-                .expect("Failed to create remote folder.");
-        } else {
-            log::debug!("Remote folder '{}' already exists.", &formatted_date);
-        }
-
-        let remote_folder_exists = sftp.stat(Path::new(&remote_folder_name)).is_ok();
-        if !remote_folder_exists {
-            log::debug!(
-                "Remote folder '{}' does not exist, creating it.",
-                &remote_folder_name
-            );
-            // 创建远程文件夹
-            sftp.mkdir(Path::new(&remote_folder_name), 0o755)
-                .expect("Failed to create remote folder.");
-        } else {
-            log::debug!("Remote folder '{}' already exists.", &remote_folder_name);
-        }
-    }
-
-    // upload changed files to the assigned folder.
-    for file in changed_files {
-        log::info!("Uploading {}", file.to_str().unwrap());
-
-        // open local file
-        let mut local_file = fs::File::open(&file).expect("Failed to open local file.");
-
-        // check if remote file exists. If so, remove it.
-        let remote_file_path = format!(
-            "{}/{}",
-            remote_folder_name,
-            file.file_name().unwrap().to_str().unwrap()
-        );
-        let remote_file_exists = sftp.stat(Path::new(&remote_file_path)).is_ok();
-        if remote_file_exists {
-            log::debug!(
-                "Remote file '{}' already exists, removing it.",
-                &remote_file_path
-            );
-            sftp.unlink(Path::new(&remote_file_path))
-                .expect("Failed to remove remote file.");
-        }
-
-        // create remote file
-        let mut remote_file = sftp
-            .create(Path::new(&remote_file_path))
-            .expect("Failed to create remote file.");
-
-        // copy local file to remote server
-        io::copy(&mut local_file, &mut remote_file).expect("Failed to copy file.");
-
-        log::info!("{} uploaded.", file.display());
     }
     log::info!("Finished uploading files.");
 }
