@@ -1,7 +1,6 @@
 [package]
 name = "cli"
 description = "Command-line interface for the PPT stealer."
-cli_version = "0.1.0-alpha1"
 version.workspace = true                                    # 继承根 workspace 的 version
 authors.workspace = true                                    # 继承 authors
 edition.workspace = true                                    # 继承 edition

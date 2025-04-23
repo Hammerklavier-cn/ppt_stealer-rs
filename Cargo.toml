@@ -1,13 +1,19 @@
 [workspace]
 resolver = "2"
-members = ["crates/cli", "crates/file-management", "crates/gtk4-interface", "crates/stealer", "crates/stealer-cli"]
+members = [
+    "crates/cli",
+    "crates/file-management",
+    "crates/gtk4-interface",
+    "crates/stealer",
+    "crates/stealer-cli",
+]
 exclude = ["crates/old"]
 default-members = ["crates/stealer"]
 
 # 定义工作区级别的公共包属性
 [workspace.package]
 name = "ppt_stealer-rs"
-version = "0.3.2-alpha2"                                                            # 统一版本号
+version = "0.3.2"                                                                   # 统一版本号
 authors = ["Hammerklavier-cn"]
 edition = "2024"
 description = "A tool to steal PowerPoint files from desktop to remote SSH server."

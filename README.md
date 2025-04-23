@@ -16,8 +16,10 @@
 
 ## 参数
 
+1. 可以使用主程序指定 `no-gui` 运行
+
 ```plaintext
-Usage: stealer.exe [OPTIONS] [COMMAND]
+Usage: stealer [OPTIONS] [COMMAND]
 
 Commands:
   gui     Start the slint GUI application
@@ -32,7 +34,8 @@ Options:
   -V, --version
           Print version
 
-Usage: stealer.exe no-gui [OPTIONS]
+
+Usage: stealer no-gui [OPTIONS]
 
 Options:
   -i, --ip <IP>
@@ -46,9 +49,9 @@ Options:
       --key-auth
           Use SSH key authentication. If not assigned, password authentication will be used.
       --upload-targets <UPLOAD_TARGETS>
-          Upload files to a ssh server [default: local] [possible values: local, ssh-server, smb-server, ftp-server]
+          Upload files to a ssh server. Note that you can only choose one kind of remote target! Only SshServer is implemented now. If multiple targets are designated, they should be quoted and separated by single space. [default: local] [possible values: local, ssh-server, smb-server, ftp-server]
       --target-folder-name <TARGET_FOLDER_NAME>
-          Scan additional folder for files.
+          Folder where target files will be stored. If not resigned, it will be stored at $HOME/%Y-%m-%d/{user_name}--{computer_name}
       --usb
           Scan USB for files.
       --refresh-interval <REFRESH_INTERVAL>
@@ -69,6 +72,8 @@ Options:
           Print help
 ```
 
+2. 若只需要命令行执行该程序，可以运行 cli 版本。此版本不包含 gtk4 依赖。
+
 ## 关于 SSH 服务器……
 
 > SSH 是一种网络协议，用于计算机之间的加密登录。最早的时候，互联网通信都是明文通信，一旦被截获，内容就暴露无疑。1995 年，芬兰学者 Tatu Ylonen 设计了 SSH 协议，将登录信息全部加密，成为互联网安全的一个基本解决方案，迅速在全世界获得推广，目前已经成为 Linux 系统的标准配置。
@@ -84,7 +89,7 @@ Options:
 1. 安装 rustc 和 cargo
    前往 [rust-lang.org/install](https://www.rust-lang.org/tools/install) 下载、安装 Rust 工具链。
 2. cd <项目根目录>
-3. cargo build --release
+3. cargo build --release （如果电脑没有 gtk4，则运行 `cargo build --release -p stealer-cli`）
 4. 二进制文件位于 target/release/ 中
 
 ## 依赖
@@ -112,11 +117,11 @@ regex = "=1.11.1"
 - [x] 去除缓冲文件 (will be supported in v0.2 final release)
 - [x] 识别 U 盘，并上传其中所有的文档文件 (will be supported in v0.2 final release)
 - [x] 解决上传时 U 盘弹出导致路径不存在、程序 panic 的问题 (will be supported in v0.2 final release)
-- [ ] 添加将文件复制到本地特定目录的功能 (will be supported in v0.3.2)
+- [x] 添加将文件复制到本地特定目录的功能 (will be supported in v0.3.2)
 - [x] 添加额外的本地目录 (will be supported in v0.3)
-- [ ] 添加基于 Slint 客户端
+- [ ] 添加基于 GTK4 客户端
 - [ ] 添加隐藏命令行窗口的模式
-- [ ] 添加对 ftp 服务器的支持
+- [ ] 添加对 FTP、SMB 服务器的支持
 - [x] 在云端保留原文件相对桌面的相对路径 (will be supported in v0.2 final release)
 - [x] 检测到远程同名文件内容相同后，取消重复上传
 - [x] 指定路径，代替默认的桌面路径 (will be supported in v0.3)
