@@ -1,0 +1,10 @@
+[package]
+name = "gtk4-interface"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description.workspace = true
+readme.workspace = true
+
+[dependencies]
+gtk = { version = "0.9.6", package = "gtk4", features = ["v4_14"] }

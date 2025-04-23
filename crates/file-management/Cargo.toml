@@ -1,0 +1,20 @@
+[package]
+name = "file-management"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description.workspace = true
+readme.workspace = true
+
+
+[dependencies]
+log = "0.4.26"
+env_logger = "0.11.7"
+ssh2 = "0.9.5"
+chrono = "0.4.40"
+gethostname = "1.0.0"
+dirs = "6.0.0"
+sha2 = "0.10.8"
+anyhow = "1.0.97"
+walkdir = "2.5.0"
+regex = "1.11.1"

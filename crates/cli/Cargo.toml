@@ -1,0 +1,9 @@
+[package]
+name = "cli"
+description = "Command-line interface for the PPT stealer."
+version.workspace = true                                    # 继承根 workspace 的 version
+authors.workspace = true                                    # 继承 authors
+edition.workspace = true                                    # 继承 edition
+
+[dependencies]
+clap = { version = "4.5.32", features = ["derive"] }

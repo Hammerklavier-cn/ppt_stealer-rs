@@ -75,7 +75,10 @@ pub fn file_moniter(
                     selected_files.push(path);
                 }
             } else {
-                log::debug!("Skipping file {}", path.display());
+                log::trace!(
+                    "Skipping file {}, because it is not our target.",
+                    path.display()
+                );
             }
         } else {
             log::trace!("Skipping directory {}", path.display());
