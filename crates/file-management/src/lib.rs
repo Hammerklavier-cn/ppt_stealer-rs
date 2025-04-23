@@ -91,7 +91,7 @@ where
 pub trait SingleFile {
     /// Return error if connection failed to establish
     fn is_exists(&self) -> Result<bool, Error>;
-    fn get_abs_path(&self) -> Result<PathBuf, Error>;
+    fn get_path(&self) -> Result<PathBuf, Error>;
     fn get_relpath(&self) -> Result<PathBuf, Error>;
     fn get_sha256(&self) -> Result<String, Error>;
     fn get_new_sha256(&self) -> Result<String, Error>;
@@ -112,6 +112,7 @@ pub trait TargetFile: SingleFile {
     /// the folders.
     fn initialise_path(&self) -> Result<(), Error>;
     fn receive_from_file(&self, source_file: &LocalFile) -> Result<(), Error>;
+    fn exists(&self) -> Result<bool, Error>;
 }
 
 /// This struct depicts a local file.
@@ -147,7 +148,7 @@ impl SingleFile for LocalFile {
         Ok(self.path.exists())
     }
 
-    fn get_abs_path(&self) -> Result<PathBuf, Error> {
+    fn get_path(&self) -> Result<PathBuf, Error> {
         Ok(self.path.canonicalize()?)
     }
 
@@ -186,16 +187,24 @@ impl SingleFile for LocalFile {
             }
         };
 
-        self.sha256
+        self.sha256 // mutable borrow occurs here!
             .replace(Some(sha256_result.as_deref().unwrap().to_string()));
         sha256_result
     }
 
     fn get_sha256(&self) -> Result<String, Error> {
-        let sha256_result = match self.sha256.borrow().as_ref() {
-            Some(sha256sum) => Ok(sha256sum.clone()),
-            None => self.get_new_sha256(),
+        let mut update_needed = false;
+        let mut sha256_result: Result<String, Error> = Ok(String::new());
+        // borrow occurs here!
+        match self.sha256.borrow().as_ref() {
+            Some(sha256sum) => sha256_result = Ok(sha256sum.clone()),
+            None => update_needed = true,
         };
+
+        if update_needed {
+            sha256_result = self.get_new_sha256();
+        }
+
         if let Ok(sha256_value) = &sha256_result {
             log::debug!(
                 "SHA256 sum of file `{}` is `{}`",
@@ -210,7 +219,7 @@ impl TargetFile for LocalFile {
     type Manager = LocalTargetManager;
     fn from_relpath(relpath: &Path, fm: Rc<RefCell<Self::Manager>>) -> Self {
         Self {
-            path: fm.borrow().base_path.join(relpath).canonicalize().unwrap(),
+            path: fm.borrow().base_path.join(relpath),
             sha256: RefCell::new(None),
             ltm: fm.clone(),
         }
@@ -226,37 +235,51 @@ impl TargetFile for LocalFile {
         Ok(())
     }
     fn receive_from_file(&self, source_file: &LocalFile) -> Result<(), Error> {
+        self.initialise_path()?;
+
         let mut remote_file_io = fs::File::open(&self.path)?;
         let mut local_file_io = fs::File::open(&*source_file.path)?;
 
         io::copy(&mut local_file_io, &mut remote_file_io)?;
         Ok(())
     }
+    fn exists(&self) -> Result<bool, Error> {
+        Ok(self.path.exists())
+    }
 }
 impl PartialEq for LocalFile {
     fn eq(&self, other: &Self) -> bool {
-        self.get_sha256().ok().as_deref() == other.get_sha256().ok().as_deref()
+        println!("Eq trait for LocalFile");
+        let result = self.get_sha256().ok().as_deref() == other.get_sha256().ok().as_deref();
+        println!("BorrowMutError doesn't occur during `eq` for LocalFile");
+        result
     }
 }
 impl Eq for LocalFile {}
 impl PartialEq for Box<dyn SingleFile> {
     fn eq(&self, other: &Self) -> bool {
+        println!("Eq trait for dyn SingleFile");
         self.get_new_sha256().ok().as_deref() == other.get_new_sha256().ok().as_deref()
     }
 }
 impl Eq for Box<dyn SingleFile> {}
 impl Hash for Box<dyn SingleFile> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        println!("Hash trait for dyn SingleFile");
         self.get_new_sha256().ok().as_deref().hash(state);
     }
 }
 // impl Eq for LocalFile {}
 impl Hash for LocalFile {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        println!("Hash trait for LocalFile");
         self.path.hash(state);
-        if let Some(sha256) = self.sha256.borrow().as_ref() {
-            sha256.hash(state);
-        }
+        // In order to save time, sha256 will be excluded from hash.
+        // If conflicts occurs, Eq trait will handle it.
+        //
+        // if let Some(sha256) = self.sha256.borrow().as_ref() {
+        //     sha256.hash(state);
+        // }
     }
 }
 
@@ -287,26 +310,15 @@ impl SingleFile for SshTargetFile {
         Ok(exist_or_not)
     }
 
-    fn get_abs_path(&self) -> Result<PathBuf, Error> {
-        Ok(self.path.canonicalize()?)
+    fn get_path(&self) -> Result<PathBuf, Error> {
+        Ok(self.path.clone())
     }
 
     fn get_relpath(&self) -> Result<PathBuf, Error> {
         self.path
-            .canonicalize()
-            .map_err(|e| {
-                anyhow!(
-                    "Failed to get canonicalized path of {}: {}",
-                    self.path.display(),
-                    e
-                )
-            })
-            .and_then(|canonical_path| {
-                canonical_path
-                    .strip_prefix(&self.ssh_manager.borrow().base_path)
-                    .map(|p| p.to_path_buf())
-                    .map_err(|e| anyhow!("Failed to get relative path: {}", e))
-            })
+            .strip_prefix(&self.ssh_manager.borrow().base_path)
+            .map(|p| p.to_path_buf())
+            .map_err(|e| anyhow!("Failed to get relative path: {}", e))
     }
 
     /// Get value from self.sha256_cell if exists, or get the value
@@ -402,7 +414,7 @@ impl TargetFile for SshTargetFile {
     type Manager = SshTargetManager;
     fn from_relpath(relpath: &Path, fm: Rc<RefCell<SshTargetManager>>) -> Self {
         Self {
-            path: fm.borrow().base_path.join(relpath).canonicalize().unwrap(),
+            path: fm.borrow().base_path.join(relpath),
             sha256_cell: RefCell::new(None),
             ssh_manager: fm.clone(),
         }
@@ -423,7 +435,40 @@ impl TargetFile for SshTargetFile {
             }
             let mut temp_path = remote_dirpath;
             loop {
-                let parent_folder = temp_path.parent().unwrap();
+                let parent_folder = match temp_path.parent() {
+                    Some(p) => {
+                        if p.to_str().unwrap() == "" {
+                            log::trace!(
+                                "Remote folder '{}' doesn't have a parent folder. So create it.",
+                                temp_path.display()
+                            );
+                            sftp.mkdir(temp_path, 0o755).or_else(|e| {
+                                Err(anyhow!(
+                                    "Failed to create remote folder at '{}': {}",
+                                    temp_path.display(),
+                                    e
+                                ))
+                            })?;
+                            break;
+                        } else {
+                            p
+                        }
+                    }
+                    None => {
+                        log::trace!(
+                            "Remote folder '{}' doesn't have a parent folder. So create it.",
+                            temp_path.display()
+                        );
+                        sftp.mkdir(temp_path, 0o755).or_else(|e| {
+                            Err(anyhow!(
+                                "Failed to create remote folder at '{}': {}",
+                                temp_path.display(),
+                                e
+                            ))
+                        })?;
+                        break;
+                    }
+                };
                 if sftp.stat(parent_folder).is_ok() {
                     log::trace!(
                         "Remote folder '{}' exists. Now create child folder '{}'.",
@@ -438,6 +483,7 @@ impl TargetFile for SshTargetFile {
                         ))
                     })?;
                     log::trace!("Remote folder '{}' created.", temp_path.display());
+                    break;
                 } else {
                     log::trace!("Remote folder '{}' does not exist!", temp_path.display());
                     temp_path = parent_folder;
@@ -448,44 +494,64 @@ impl TargetFile for SshTargetFile {
         Ok(())
     }
     fn receive_from_file(&self, source_file: &LocalFile) -> Result<(), Error> {
+        self.initialise_path()?;
         // First compare the two file
-        let self_box = Box::new(self.clone()) as Box<dyn SingleFile>;
-        let source_box = Box::new(source_file.clone()) as Box<dyn SingleFile>;
+        if self.exists()? {
+            let self_box = Box::new(self.clone()) as Box<dyn SingleFile>;
+            let source_box = Box::new(source_file.clone()) as Box<dyn SingleFile>;
 
-        if self_box == source_box {
-            return Ok(());
+            if self_box == source_box {
+                log::debug!(
+                    "{} and {} are the same. Skip uploading.",
+                    self.path.display(),
+                    source_file.path.display()
+                );
+                return Ok(());
+            }
         }
 
         // If the two files are not the same, upload the local file.
+        log::debug!(
+            "Uploading {} to {}...",
+            &source_file.get_path().unwrap().display(),
+            &self.get_path().unwrap().display()
+        );
         let mut sftp = self.ssh_manager.borrow_mut().get_sftp()?;
-        let mut remote_file_io = sftp.create(&self.get_abs_path()?)?;
+        let mut remote_file_io = sftp.create(&self.get_path()?)?;
 
-        let mut local_file_io = std::fs::File::open(&source_file.get_abs_path()?)?;
+        let mut local_file_io = std::fs::File::open(&source_file.get_path()?)?;
 
         match io::copy(&mut local_file_io, &mut remote_file_io) {
             Ok(_) => {
                 log::debug!(
                     "Uploaded {} to {} successfully.",
-                    &source_file.get_abs_path().unwrap().display(),
-                    &self.get_abs_path().unwrap().display(),
+                    &source_file.get_path().unwrap().display(),
+                    &self.get_path().unwrap().display(),
                 );
                 Ok(())
             }
             Err(e) => {
                 log::error!(
                     "Failed to upload {} to {}: {}",
-                    &source_file.get_abs_path().unwrap().display(),
-                    &self.get_abs_path().unwrap().display(),
+                    &source_file.get_path().unwrap().display(),
+                    &self.get_path().unwrap().display(),
                     e
                 );
                 Err(anyhow!(
                     "Failed to upload {} to {}: {}",
-                    &source_file.get_abs_path().unwrap().display(),
-                    &self.get_abs_path().unwrap().display(),
+                    &source_file.get_path().unwrap().display(),
+                    &self.get_path().unwrap().display(),
                     e
                 ))
             }
         }
+    }
+    fn exists(&self) -> Result<bool, Error> {
+        let mut sftp = self.ssh_manager.borrow_mut().get_sftp()?;
+        if let Ok(s) = sftp.stat(&self.path) {
+            return Ok(true);
+        }
+        return Ok(false);
     }
 }
 
@@ -643,7 +709,13 @@ impl LocalSourceManager {
         min_depth: Option<usize>,
         max_depth: Option<usize>,
     ) -> Result<()> {
+        log::info!("Getting files from {}", self.base_path.display());
         let files = self.get_files(exts, regex, min_depth, max_depth)?;
+        log::info!(
+            "Uploading starts from {} to {}",
+            self.base_path.display(),
+            target_manager.borrow().get_base_path().display()
+        );
         for file in files {
             file.upload_to_folder(target_manager.clone())?;
         }
@@ -677,7 +749,7 @@ impl LocalTargetManager {
 }
 impl FolderManager for LocalTargetManager {
     fn get_base_path(&self) -> PathBuf {
-        self.base_path.canonicalize().unwrap()
+        self.base_path.clone()
     }
 }
 impl LocalFolderManager for LocalTargetManager {}
@@ -806,7 +878,7 @@ impl SshTargetManager {
 }
 impl FolderManager for SshTargetManager {
     fn get_base_path(&self) -> PathBuf {
-        self.base_path.canonicalize().unwrap()
+        self.base_path.clone()
     }
 }
 impl TargetManager for SshTargetManager {

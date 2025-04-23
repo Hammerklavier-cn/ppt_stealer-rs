@@ -41,7 +41,7 @@ fn main() {
                 scan_params,
             } => {
                 log::info!("No GUI mode selected.");
-                headless(scan_params, server_params, target_params);
+                headless(scan_params, server_params, target_params).unwrap();
             }
         },
         None => {

@@ -103,13 +103,16 @@ pub struct LocalParams {
 pub struct TargetParams {
     #[arg(
         long,
-        help = "Upload files to a ssh server. Note that you can only choose one kind of remote target! Only SshServer is implemented now.",
+        help = "Upload files to a ssh server. Note that you can only choose one kind of remote target! Only SshServer is implemented now. If multiple targets are designated, they should be quoted and separated by single space.",
         default_value = "local",
         value_delimiter = ' '
     )]
     pub upload_targets: Vec<UploadTarget>,
 
-    #[arg(long, help = "Scan additional folder for files.")]
+    #[arg(
+        long,
+        help = "Folder where target files will be stored. If not resigned, it will be stored at $HOME/%Y-%m-%d/{user_name}--{computer_name}"
+    )]
     pub target_folder_name: Option<String>,
 }
 

@@ -1,6 +1,7 @@
-use anyhow::Result;
+use anyhow::{Error, Result};
 use log;
 use std::{cell::RefCell, collections::BTreeSet, rc::Rc};
+use watch_dog::get_source_directories;
 
 mod watch_dog;
 
@@ -14,7 +15,7 @@ use file_management::{
 trait ErasedTargetManager {
     fn receive_from_folder(
         &self,
-        local_source_folder: LocalSourceManager,
+        local_source_folder: &LocalSourceManager,
         exts: &[&str],
         regex: Option<&str>,
         min_depth: Option<usize>,
@@ -26,7 +27,7 @@ trait ErasedTargetManager {
 impl ErasedTargetManager for LocalTargetManager {
     fn receive_from_folder(
         &self,
-        local_source_folder: LocalSourceManager,
+        local_source_folder: &LocalSourceManager,
         exts: &[&str],
         regex: Option<&str>,
         min_depth: Option<usize>,
@@ -47,7 +48,7 @@ impl ErasedTargetManager for LocalTargetManager {
 impl ErasedTargetManager for SshTargetManager {
     fn receive_from_folder(
         &self,
-        local_source_folder: LocalSourceManager,
+        local_source_folder: &LocalSourceManager,
         exts: &[&str],
         regex: Option<&str>,
         min_depth: Option<usize>,
@@ -64,10 +65,12 @@ impl ErasedTargetManager for SshTargetManager {
     }
 }
 
-pub fn headless(scan_params: ScanParams, server_params: ServerParams, target_params: TargetParams) {
+pub fn headless(
+    scan_params: ScanParams,
+    server_params: ServerParams,
+    target_params: TargetParams,
+) -> Result<(), Error> {
     log::info!("Executing headless function.");
-
-    // determine base directory
 
     // connect to target file manager
     log::info!("Targets: {:?}", target_params.upload_targets);
@@ -94,7 +97,10 @@ pub fn headless(scan_params: ScanParams, server_params: ServerParams, target_par
                             },
                             None => panic!("KeyAuth is currently unsupported!"),
                         };
-                        let manager = SshTargetManager::new(Some("base_path"), login_params);
+                        let manager = SshTargetManager::new(
+                            target_params.target_folder_name.as_deref(),
+                            login_params,
+                        );
                         target_managers.push(Box::new(manager) as Box<dyn ErasedTargetManager>);
                     }
                 }
@@ -113,17 +119,33 @@ pub fn headless(scan_params: ScanParams, server_params: ServerParams, target_par
         log::debug!("Loop.");
         // get source directories
         // As source might include mutable divices (like usb), it must be refreshed periodically.
-        let source_pathbuf_set = match watch_dog::get_source_directories(&scan_params) {
-            Ok(directory_set) => directory_set,
-            Err(_) => continue,
-        };
-
-        let mut local_target_managers = BTreeSet::new();
-        for source_pathbuf in source_pathbuf_set {
-            local_target_managers.insert(LocalSourceManager {
-                base_path: source_pathbuf,
-            });
-            println!("{:?}", &local_target_managers)
+        let source_directories = get_source_directories(&scan_params)?;
+        let mut source_managers: BTreeSet<LocalSourceManager> = BTreeSet::new();
+        for dir in source_directories {
+            source_managers.insert(LocalSourceManager { base_path: dir });
         }
+        // let mut local_target_managers = BTreeSet::new();
+        // for source_pathbuf in source_pathbuf_set {
+        //     local_target_managers.insert(LocalSourceManager {
+        //         base_path: source_pathbuf,
+        //     });
+        //     println!("{:?}", &local_target_managers)
+        // }
+        for target_manager in target_managers.iter() {
+            for local_manager in source_managers.iter() {
+                target_manager.receive_from_folder(
+                    local_manager,
+                    &scan_params
+                        .formats
+                        .iter()
+                        .map(|s| s.as_str())
+                        .collect::<Vec<_>>(),
+                    scan_params.regex.as_deref(),
+                    scan_params.min_depth,
+                    scan_params.max_depth,
+                )?;
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_secs(scan_params.refresh_interval));
     }
 }

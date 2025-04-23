@@ -40,7 +40,12 @@ fn main() {
                 target_params,
                 scan_params,
             } => {
-                headless(scan_params, server_params, target_params);
+                match headless(scan_params, server_params, target_params) {
+                    Ok(_) => {}
+                    Err(e) => {
+                        log::error!("An error occurred when running headless mode: {}", e)
+                    }
+                };
             }
             Commands::Gui => {
                 log::error!(
