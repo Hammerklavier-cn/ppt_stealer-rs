@@ -3,12 +3,11 @@ use log;
 use std::{cell::RefCell, collections::BTreeSet, rc::Rc};
 use watch_dog::get_source_directories;
 
-mod watch_dog;
+pub(crate) mod watch_dog;
 
 use cli::{ScanParams, ServerParams, TargetParams, UploadTarget};
 use file_management::{
     LocalSourceManager, LocalTargetManager, SshPasswordAuthentication, SshTargetManager,
-    TargetFile, TargetManager,
 };
 
 // 新增：定义一个新的 trait 用于擦除关联类型
@@ -79,6 +78,9 @@ pub fn headless(
     {
         let mut remote_server_selected = false;
         for upload_target in target_params.upload_targets {
+            if remote_server_selected {
+                panic!("Only one remote server can be selected!");
+            }
             match upload_target {
                 UploadTarget::Local => {
                     let manager =
@@ -105,10 +107,10 @@ pub fn headless(
                     }
                 }
                 UploadTarget::SmbServer | UploadTarget::FtpServer => {
-                    if !remote_server_selected {
-                        remote_server_selected = true;
-                        panic!("SMB and FTP are supported yet!");
-                    }
+                    panic!("SMB and FTP are supported yet!");
+                    // if !remote_server_selected {
+                    //     remote_server_selected = true;
+                    // }
                 }
             };
         }

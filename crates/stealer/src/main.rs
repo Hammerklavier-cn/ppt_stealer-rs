@@ -1,13 +1,10 @@
 use log;
 use std::process::exit;
 
-use cli::{DebugLevel, get_args, shared_function};
+use cli::{DebugLevel, get_args};
 use stealer_cli::headless;
 
 fn main() {
-    println!("Hello, world!");
-    shared_function();
-
     // parse command line arguments
     let args = get_args();
 

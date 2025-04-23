@@ -4,6 +4,7 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 /// Get source directories according to scan parameters
+#[allow(dead_code)]
 pub(crate) fn get_source_directories(
     scan_params: &ScanParams,
 ) -> Result<BTreeSet<PathBuf>, anyhow::Error> {

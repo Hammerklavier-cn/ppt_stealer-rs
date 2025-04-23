@@ -527,7 +527,7 @@ impl TargetFile for SshTargetFile {
             &source_file.get_path().unwrap().display(),
             &self.get_path().unwrap().display()
         );
-        let mut sftp = self.ssh_manager.borrow_mut().get_sftp()?;
+        let sftp = self.ssh_manager.borrow_mut().get_sftp()?;
         let mut remote_file_io = sftp.create(&self.get_path()?)?;
 
         let mut local_file_io = std::fs::File::open(&source_file.get_path()?)?;
@@ -558,8 +558,8 @@ impl TargetFile for SshTargetFile {
         }
     }
     fn exists(&self) -> Result<bool, Error> {
-        let mut sftp = self.ssh_manager.borrow_mut().get_sftp()?;
-        if let Ok(s) = sftp.stat(&self.path) {
+        let sftp = self.ssh_manager.borrow_mut().get_sftp()?;
+        if let Ok(_) = sftp.stat(&self.path) {
             return Ok(true);
         }
         return Ok(false);
