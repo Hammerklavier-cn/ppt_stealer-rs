@@ -9,4 +9,5 @@ readme.workspace = true
 [dependencies]
 file-management = { path = "../file-management" }
 
-gtk = { version = "0.9.6", package = "gtk4", features = ["v4_14"] }
+gtk = { version = "0.9.6", package = "gtk4" }
+adw = { version = "0.7.2", package = "libadwaita", features = ["v1_5"] }
